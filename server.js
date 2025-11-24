@@ -28,11 +28,25 @@ app.use(
     saveUninitialized: true,
   })
 );
+// LOGIN with error support
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+  const user = users[username];
+
+  // ❌ If user not found or password wrong
+  if (!user || user.password !== password) {
+    return res.redirect('/login.html?error=1');
+  }
+
+  // ✅ Login success
+  req.session.user = { username, role: user.role };
+  res.redirect('/dashboard.html');
+});
+
 
 // ---------- Demo users ----------
 const users = {
   pavankumar: { password: 'Admin@', role: 'admin' },
-  User: { password: 'user watch', role: 'member' },
 };
 
 

@@ -14,6 +14,19 @@
       <p>Enter your account details to continue.</p>
 
       <form method="POST" action="/login">
+        <div id="errorMsg" style="
+  display:none;
+  background:#fee2e2;
+  color:#991b1b;
+  padding:10px;
+  border-radius:10px;
+  text-align:center;
+  margin-bottom:12px;
+  font-size:14px;
+">
+  ❌ Incorrect username or password
+</div>
+
         <div class="form-group">
           <label>Username</label>
           <input type="text" name="username" required />
@@ -29,9 +42,17 @@
 
       <div class="card-footer">
         <a href="index.html">Back to home</a>
+        <a href="signup.html">Create an account</a>
       </div>
     </div>
   </div>
+  <script>
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('error')) {
+    document.getElementById('errorMsg').style.display = 'block';
+  }
+</script>
+
 </body>
 
 </html>
