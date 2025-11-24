@@ -2,32 +2,135 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>YVideo</title>
+  <title>Admin – YVideo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <link rel="stylesheet" href="style.css" />
 </head>
-
 <body>
   <div class="page">
     <div class="card">
-      <h1>Login to YVideo</h1>
-      <p>Enter your account details to continue.</p>
+      <h1>Admin – Upload video</h1>
+      <p>Only admin users can access this page.</p>
 
+      <!-- upload form -->
       <form method="POST" action="/upload" enctype="multipart/form-data">
-  <div class="form-group">
-    <label>Select video</label>
-    <input type="file" name="video" accept="video/*" required />
-  </div>
+        <div class="form-group">
+          <label>Select video</label>
+          <input type="file" name="video" accept="video/*" required />
+        </div>
 
-  <button type="submit" class="primary">Upload</button>
-</form>
-
+        <button type="submit" class="primary">Upload</button>
+      </form>
 
       <div class="card-footer">
-        <a href="index.html">Back to home</a>
+        <a href="dashboard.html">Go to library</a> •
+        <a href="/logout">Logout</a>
       </div>
+
+      <hr style="margin:16px 0; border:none; border-top:1px solid #e5e7eb;" />
+
+      <h2 style="font-size:16px; margin-bottom:8px;">Uploaded videos</h2>
+      <div id="adminState" class="state-message"></div>
+      <div id="adminVideos" class="video-grid"></div>
     </div>
   </div>
-</body>
 
+  <script>
+    let isAdmin = false;
+    let allVideos = [];
+
+    async function checkAdmin() {
+      const res = await fetch('/check-auth');
+      if (!res.ok) {
+        window.location.href = '/login.html';
+        return;
+      }
+      const data = await res.json();
+      if (!data.user || data.user.role !== 'admin') {
+        alert('You are not admin. Redirecting to library.');
+        window.location.href = '/dashboard.html';
+        return;
+      }
+      isAdmin = true;
+    }
+
+    async function loadVideos() {
+      const stateEl = document.getElementById('adminState');
+      const container = document.getElementById('adminVideos');
+      stateEl.textContent = 'Loading videos…';
+      container.innerHTML = '';
+
+      const res = await fetch('/videos');
+      if (!res.ok) {
+        stateEl.textContent = 'Could not load videos.';
+        return;
+      }
+
+      const data = await res.json();
+      allVideos = data;
+
+      if (!data.length) {
+        stateEl.textContent = 'No videos uploaded yet.';
+        return;
+      }
+
+      stateEl.textContent = '';
+      renderAdminVideos(data);
+    }
+
+    function renderAdminVideos(videos) {
+      const container = document.getElementById('adminVideos');
+      container.innerHTML = '';
+
+      videos.forEach(v => {
+        const fileName = v.url.split('/').pop();
+        const card = document.createElement('div');
+        card.className = 'video-card';
+
+        const thumb = document.createElement('div');
+        thumb.className = 'video-thumb';
+        const videoEl = document.createElement('video');
+        videoEl.src = v.url;
+        videoEl.controls = true;
+        thumb.appendChild(videoEl);
+
+        const meta = document.createElement('div');
+        meta.className = 'video-meta';
+
+        const title = document.createElement('div');
+        title.className = 'video-title';
+        title.textContent = fileName;
+
+        const delBtn = document.createElement('button');
+        delBtn.textContent = 'Delete';
+        delBtn.onclick = async () => {
+          const ok = confirm(`Delete ${fileName}?`);
+          if (!ok) return;
+          const res = await fetch(`/delete-video/${encodeURIComponent(fileName)}`, {
+            method: 'DELETE',
+          });
+          if (res.ok) {
+            alert('Deleted.');
+            loadVideos();
+          } else {
+            alert('Failed to delete.');
+          }
+        };
+
+        meta.appendChild(title);
+        meta.appendChild(delBtn);
+        card.appendChild(thumb);
+        card.appendChild(meta);
+        container.appendChild(card);
+      });
+    }
+
+    (async function init() {
+      await checkAdmin();
+      if (isAdmin) {
+        loadVideos();
+      }
+    })();
+  </script>
+</body>
 </html>

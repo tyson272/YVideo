@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Profile – YVideo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="page">
+    <div class="card">
+      <h1>Your profile</h1>
+      <p>Manage your account and password.</p>
+
+      <div id="userInfo" style="font-size:14px; margin-bottom:12px;"></div>
+
+      <!-- Status / error box -->
+      <div id="profileMsg" style="
+        display:none;
+        padding:10px;
+        border-radius:10px;
+        text-align:center;
+        margin-bottom:12px;
+        font-size:14px;
+      "></div>
+
+      <form method="POST" action="/change-password">
+        <div class="form-group">
+          <label>Current password</label>
+          <input type="password" name="currentPassword" required />
+        </div>
+
+        <div class="form-group">
+          <label>New password</label>
+          <input type="password" name="newPassword" required />
+        </div>
+
+        <div class="form-group">
+          <label>Confirm new password</label>
+          <input type="password" name="confirmPassword" required />
+        </div>
+
+        <button type="submit" class="primary">Change password</button>
+      </form>
+
+      <div class="card-footer">
+        <a href="dashboard.html">Back to library</a> •
+        <a href="/logout">Logout</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    async function loadUser() {
+      const res = await fetch('/check-auth');
+      if (!res.ok) {
+        window.location.href = '/login.html';
+        return;
+      }
+      const data = await res.json();
+      const user = data.user;
+      const info = document.getElementById('userInfo');
+      info.textContent = `Logged in as: ${user.username} (${user.role})`;
+    }
+
+    function showStatus() {
+      const params = new URLSearchParams(window.location.search);
+      const error = params.get('error');
+      const status = params.get('status');
+      const box = document.getElementById('profileMsg');
+
+      if (!error && !status) return;
+
+      box.style.display = 'block';
+      if (status === 'success') {
+        box.style.background = '#dcfce7';
+        box.style.color = '#166534';
+        box.textContent = '✅ Password changed successfully.';
+        return;
+      }
+
+      // errors
+      box.style.background = '#fee2e2';
+      box.style.color = '#991b1b';
+
+      let msg = 'Something went wrong.';
+      if (error === 'required') msg = 'All fields are required.';
+      if (error === 'wrong_current') msg = 'Current password is incorrect.';
+      if (error === 'pwd_short') msg = 'New password must be at least 6 characters.';
+      if (error === 'mismatch') msg = 'New passwords do not match.';
+      if (error === 'not_found') msg = 'User not found.';
+      box.textContent = '❌ ' + msg;
+    }
+
+    (function init() {
+      loadUser();
+      showStatus();
+    })();
+  </script>
+</body>
+</html>
