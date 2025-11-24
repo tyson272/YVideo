@@ -31,8 +31,8 @@ app.use(
 
 // ---------- Demo users ----------
 const users = {
-  myAdmin01: { password: 'Admin@2025', role: 'admin' },
-  pavanUser: { password: 'User#1234', role: 'member' },
+  pavankumar: { password: 'Admin@', role: 'admin' },
+  User: { password: 'user watch', role: 'member' },
 };
 
 
