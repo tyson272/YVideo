@@ -32,7 +32,7 @@ app.use(
 // ---------- Demo users ----------
 const users = {
   admin: { password: 'admin123', role: 'admin' },
-  user: { password: 'user123', role: 'member' },
+  user: { password: 'user watch', role: 'user' },
 };
 
 // ---------- Multer (file upload) ----------
