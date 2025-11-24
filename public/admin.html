@@ -1,20 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin - YVideo</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <title>YVideo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
-  <h1>Admin – Upload Video</h1>
+  <div class="page">
+    <div class="card">
+      <h1>Login to YVideo</h1>
+      <p>Enter your account details to continue.</p>
 
-  <form method="POST" action="/upload" enctype="multipart/form-data">
-    <input type="file" name="video" accept="video/*" required>
-    <br><br>
-    <button type="submit">Upload</button>
-  </form>
+      <form method="POST" action="/login">
+        <div class="form-group">
+          <label>Username</label>
+          <input type="text" name="username" required />
+        </div>
 
-  <br>
-  <a href="dashboard.html">Go to Dashboard</a> |
-  <a href="/logout">Logout</a>
+        <div class="form-group">
+          <label>Password</label>
+          <input type="password" name="password" required />
+        </div>
+
+        <button type="submit" class="primary">Login</button>
+      </form>
+
+      <div class="card-footer">
+        <a href="index.html">Back to home</a>
+      </div>
+    </div>
+  </div>
 </body>
+
 </html>

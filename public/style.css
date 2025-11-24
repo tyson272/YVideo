@@ -11,32 +11,40 @@ body {
   color: #111827;
 }
 
-/* ====== Layout ====== */
+/* Wrapper for pages with header + main */
 .app-shell {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
+/* ====== Header / Top bar ====== */
 .app-header {
   background: #111827;
   color: #f9fafb;
-  padding: 16px 24px;
+  padding: 12px 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap; /* mobile: allows items to wrap */
 }
 
 .app-header h1 {
   margin: 0;
-  font-size: 22px;
-  letter-spacing: 0.03em;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+
+.app-header .right-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .app-header .right-actions a,
 .app-header .right-actions button {
-  margin-left: 12px;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border-radius: 999px;
   border: 1px solid #4b5563;
   background: transparent;
@@ -44,6 +52,7 @@ body {
   font-size: 13px;
   text-decoration: none;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 .app-header .right-actions a:hover,
@@ -51,41 +60,46 @@ body {
   background: #1f2937;
 }
 
-/* main content */
+/* ====== Main area ====== */
 .app-main {
   flex: 1;
-  padding: 24px;
+  padding: 16px;
   max-width: 1100px;
   margin: 0 auto;
 }
 
-/* ====== Video library ====== */
+/* Titles & subtitles */
 .section-title {
-  font-size: 20px;
+  font-size: 18px;
   margin-bottom: 4px;
 }
 
 .section-subtitle {
   font-size: 13px;
   color: #6b7280;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
 }
 
-/* search + filters row (future use) */
+/* ====== Toolbar (search row) ====== */
 .toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
   gap: 10px;
 }
 
+.search-box {
+  flex: 1;
+}
+
 .search-box input {
+  width: 100%;
   padding: 8px 10px;
   border-radius: 999px;
   border: 1px solid #d1d5db;
-  min-width: 220px;
+  font-size: 14px;
 }
 
 .search-box input:focus {
@@ -93,11 +107,11 @@ body {
   border-color: #111827;
 }
 
-/* grid of videos */
+/* ====== Video grid / library ====== */
 .video-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 18px;
+  grid-template-columns: 1fr; /* mobile: 1 column */
+  gap: 14px;
 }
 
 .video-card {
@@ -119,14 +133,15 @@ body {
 
 .video-thumb video {
   width: 100%;
-  height: 180px;
+  height: auto;         /* let height adjust on small screens */
+  max-height: 220px;    /* prevent huge videos */
   object-fit: cover;
 }
 
 .video-meta {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 4px;
 }
 
 .video-title {
@@ -136,22 +151,116 @@ body {
 }
 
 .video-filename {
-  font-size: 12px;
+  font-size: 11px;
   color: #6b7280;
+}
+
+/* Delete button styling (dashboard) */
+.video-meta button {
+  margin-top: 6px;
+  border: none;
+  background: #ef4444;
+  color: white;
+  padding: 6px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.video-meta button:hover {
+  background: #dc2626;
 }
 
 /* ====== States ====== */
 .state-message {
   font-size: 14px;
   color: #6b7280;
-  margin-top: 12px;
+  margin-top: 8px;
 }
 
 .state-message.error {
   color: #b91c1c;
 }
 
-/* ====== Links & buttons ====== */
+/* ====== Forms (login, admin upload) ====== */
+.page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.card {
+  width: 100%;
+  max-width: 380px;
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px 18px 22px;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.05);
+}
+
+.card h1 {
+  margin-top: 0;
+  margin-bottom: 8px;
+  font-size: 20px;
+}
+
+.card p {
+  margin-top: 0;
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.form-group {
+  margin-bottom: 12px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.form-group input,
+.form-group input[type="file"] {
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  font-size: 14px;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #111827;
+}
+
+button.primary {
+  width: 100%;
+  padding: 9px 0;
+  border-radius: 999px;
+  border: none;
+  background: #111827;
+  color: #f9fafb;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+button.primary:hover {
+  background: #030712;
+}
+
+.card-footer {
+  margin-top: 10px;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ====== Links ====== */
 a {
   color: #111827;
   text-decoration: none;
@@ -159,4 +268,29 @@ a {
 
 a:hover {
   text-decoration: underline;
+}
+
+/* ====== Larger screens (tablet & desktop) ====== */
+@media (min-width: 640px) {
+  .app-main {
+    padding: 20px 24px;
+  }
+
+  .section-title {
+    font-size: 20px;
+  }
+
+  .video-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .video-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .app-header h1 {
+    font-size: 20px;
+  }
 }
