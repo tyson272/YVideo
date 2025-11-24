@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin - YVideo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>Admin – Upload Video</h1>
+
+  <form method="POST" action="/upload" enctype="multipart/form-data">
+    <input type="file" name="video" accept="video/*" required>
+    <br><br>
+    <button type="submit">Upload</button>
+  </form>
+
+  <br>
+  <a href="dashboard.html">Go to Dashboard</a> |
+  <a href="/logout">Logout</a>
+</body>
+</html>

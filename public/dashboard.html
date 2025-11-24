@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Dashboard - YVideo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <h1>🎥 YVideo Library</h1>
+
+  <p>Welcome, member! Here are your videos:</p>
+
+  <div id="videoList"></div>
+
+  <br>
+  <a href="admin.html">Admin Upload (admin only)</a> |
+  <a href="/logout">Logout</a>
+
+  <script>
+    async function checkAuth() {
+      const res = await fetch('/check-auth');
+      if (!res.ok) {
+        window.location.href = '/login.html';
+      }
+    }
+
+    async function loadVideos() {
+      const res = await fetch('/videos');
+      if (!res.ok) {
+        document.getElementById('videoList').innerText = 'Error loading videos.';
+        return;
+      }
+      const data = await res.json();
+
+      const container = document.getElementById('videoList');
+      container.innerHTML = '';
+
+      if (data.length === 0) {
+        container.innerText = 'No videos uploaded yet.';
+        return;
+      }
+
+      data.forEach(v => {
+        const video = document.createElement('video');
+        video.src = v.url;
+        video.controls = true;
+        video.width = 400;
+        video.style.display = 'block';
+        video.style.marginBottom = '20px';
+
+        container.appendChild(video);
+      });
+    }
+
+    checkAuth();
+    loadVideos();
+  </script>
+</body>
+</html>
