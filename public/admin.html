@@ -13,19 +13,15 @@
       <h1>Login to YVideo</h1>
       <p>Enter your account details to continue.</p>
 
-      <form method="POST" action="/login">
-        <div class="form-group">
-          <label>Username</label>
-          <input type="text" name="username" required />
-        </div>
+      <form method="POST" action="/upload" enctype="multipart/form-data">
+  <div class="form-group">
+    <label>Select video</label>
+    <input type="file" name="video" accept="video/*" required />
+  </div>
 
-        <div class="form-group">
-          <label>Password</label>
-          <input type="password" name="password" required />
-        </div>
+  <button type="submit" class="primary">Upload</button>
+</form>
 
-        <button type="submit" class="primary">Login</button>
-      </form>
 
       <div class="card-footer">
         <a href="index.html">Back to home</a>

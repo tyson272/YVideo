@@ -31,9 +31,10 @@ app.use(
 
 // ---------- Demo users ----------
 const users = {
-  admin: { password: 'admin123', role: 'admin' },
-  user: { password: 'user watch', role: 'user' },
+  myAdmin01: { password: 'Admin@2025', role: 'admin' },
+  pavanUser: { password: 'User#1234', role: 'member' },
 };
+
 
 // ---------- Multer (file upload) ----------
 const storage = multer.diskStorage({
@@ -56,13 +57,24 @@ function requireLogin(req, res, next) {
   }
   next();
 }
-
 function requireAdmin(req, res, next) {
-  if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.status(403).send('Forbidden: admin only');
+  console.log('requireAdmin session user:', req.session.user);
+
+  // Not logged in at all → go to login
+  if (!req.session.user) {
+    return res.redirect('/login.html');
   }
+
+  // Logged in but not admin → show clear error instead of login
+  if (req.session.user.role !== 'admin') {
+    return res
+      .status(403)
+      .send(`Forbidden: you are logged in as "${req.session.user.username}", not an admin.`);
+  }
+
   next();
 }
+
 
 // ---------- Routes ----------
 
