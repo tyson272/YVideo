@@ -25,14 +25,19 @@ const users = {
   user: { password: 'user123', role: 'member' }
 };
 
-// Where uploaded files are saved
+const multer = require("multer");
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, 'uploads/'),
-  filename: (req, file, cb) =>
-    cb(null, Date.now() + path.extname(file.originalname))
+  destination: function (req, file, cb) {
+    cb(null, "uploads/");
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + "-" + file.originalname);
+  }
 });
 
-const upload = multer({ storage });
+const upload = multer({ storage: storage });
+
 
 // LOGIN
 app.post('/login', (req, res) => {
@@ -54,16 +59,13 @@ app.get('/logout', (req, res) => {
   });
 });
 
-// UPLOAD (admin only)
-app.post('/upload', upload.single('video'), (req, res) => {
-  if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.status(403).send('Forbidden – admin only');
-  }
+app.post("/upload", upload.single("video"), (req, res) => {
   if (!req.file) {
-    return res.status(400).send('No file uploaded');
+    return res.status(400).send("No file uploaded");
   }
-  res.redirect('/admin.html');
+  res.send("Video uploaded successfully!");
 });
+
 
 // LIST VIDEOS (members only)
 app.get('/videos', (req, res) => {
@@ -87,3 +89,12 @@ app.get('/check-auth', (req, res) => {
 app.listen(PORT, () => {
   console.log(`YVideo running at http://localhost:${PORT}`);
 });
+const fs = require("fs");
+const path = require("path");
+
+const uploadDir = path.join(__dirname, "uploads");
+
+// Create uploads folder if it doesn't exist
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
