@@ -26,7 +26,6 @@
         <div class="search-box">
           <input id="searchInput" type="text" placeholder="Search by filename…">
         </div>
-        <!-- space for future filters (quality, date, etc.) -->
       </div>
 
       <div id="stateMessage" class="state-message"></div>
@@ -37,12 +36,16 @@
 
   <script>
     let allVideos = [];
+    let isAdmin = false; // will be set after /check-auth
 
     async function checkAuth() {
       const res = await fetch('/check-auth');
       if (!res.ok) {
         window.location.href = '/login.html';
+        return;
       }
+      const data = await res.json();
+      isAdmin = data.user && data.user.role === 'admin';
     }
 
     async function loadVideos() {
@@ -111,6 +114,37 @@
 
         meta.appendChild(title);
         meta.appendChild(filename);
+
+        // -------- Delete button (admin only) --------
+        if (isAdmin) {
+          const delBtn = document.createElement('button');
+          delBtn.textContent = 'Delete';
+          delBtn.style.marginTop = '8px';
+          delBtn.style.border = 'none';
+          delBtn.style.background = '#ef4444';
+          delBtn.style.color = 'white';
+          delBtn.style.padding = '6px 10px';
+          delBtn.style.borderRadius = '8px';
+          delBtn.style.cursor = 'pointer';
+
+          delBtn.onclick = async () => {
+            const confirmDel = confirm(`Delete ${fileName}?`);
+            if (!confirmDel) return;
+
+            const res = await fetch(`/delete-video/${encodeURIComponent(fileName)}`, {
+              method: 'DELETE'
+            });
+
+            if (res.ok) {
+              alert('Video deleted');
+              loadVideos(); // refresh
+            } else {
+              alert('Failed to delete video');
+            }
+          };
+
+          meta.appendChild(delBtn);
+        }
 
         card.appendChild(thumb);
         card.appendChild(meta);

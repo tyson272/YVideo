@@ -108,6 +108,24 @@ app.get('/videos', requireLogin, (req, res) => {
   const videos = files.map((f) => ({ url: `/uploads/${f}` }));
   res.json(videos);
 });
+// DELETE video (admin only)
+app.delete('/delete-video/:name', requireAdmin, (req, res) => {
+  const fileName = req.params.name;
+  const filePath = path.join(uploadDir, fileName);
+
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).json({ error: 'File not found' });
+  }
+
+  fs.unlink(filePath, (err) => {
+    if (err) {
+      console.error('Delete error:', err);
+      return res.status(500).json({ error: 'Failed to delete video' });
+    }
+    res.json({ success: true });
+  });
+});
+
 
 // CHECK AUTH (for dashboard)
 app.get('/check-auth', (req, res) => {
