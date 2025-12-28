@@ -1,209 +1,156 @@
-// server.js
+require('dotenv').config();
 
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const session = require('express-session');
 const multer = require('multer');
+const bcrypt = require('bcrypt');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- Ensure uploads folder exists ----------
+// ---------- IP WHITELIST ----------
+const allowedIPs = process.env.ALLOWED_IPS
+  ? process.env.ALLOWED_IPS.split(',').map((ip) => ip.trim())
+  : [];
+
+app.use((req, res, next) => {
+  if (allowedIPs.length === 0) return next();
+  const ip = req.ip.replace('::ffff:', '');
+  if (!allowedIPs.includes(ip)) {
+    return res.status(403).send('Access denied');
+  }
+  next();
+});
+
+// ---------- Ensure uploads folder ----------
 const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
 // ---------- Middleware ----------
-app.use(express.static('public'));               // serve /public
-app.use('/uploads', express.static(uploadDir));  // serve uploaded videos
-app.use(express.urlencoded({ extended: true })); // parse form posts
+app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
 app.use(
   session({
-    secret: 'yvideo-secret',
+    secret: process.env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'strict',
+      maxAge: Number(process.env.SESSION_TIMEOUT),
+    },
   })
 );
 
-// ---------- Users in memory ----------
-// NOTE: this is only in memory – if server restarts, users reset.
-const users = {
-  // admin account – change these to your own
-  myAdmin01: { password: 'Admin@2025', role: 'admin' },
-  // you can add more fixed users if you want, but signup will create members
-};
+// ---------- Rate limit login ----------
+app.use(
+  '/login',
+  rateLimit({
+    windowMs: 5 * 60 * 1000,
+    max: 10,
+  })
+);
 
-// ---------- Multer upload config ----------
+// ---------- Multer (video only) ----------
 const storage = multer.diskStorage({
-  destination(req, file, cb) {
-    cb(null, uploadDir);
-  },
+  destination: uploadDir,
   filename(req, file, cb) {
-    const uniqueName =
-      Date.now() +
-      '-' +
-      Math.round(Math.random() * 1e9) +
-      path.extname(file.originalname);
-    cb(null, uniqueName);
+    const name =
+      Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname);
+    cb(null, name);
   },
 });
-const upload = multer({ storage });
+
+const upload = multer({
+  storage,
+  fileFilter(req, file, cb) {
+    if (!file.mimetype.startsWith('video/')) {
+      return cb(new Error('Video only'));
+    }
+    cb(null, true);
+  },
+  limits: { fileSize: 500 * 1024 * 1024 },
+});
+
+// ---------- Password Hash ----------
+const siteHash = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
+const adminHash = bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10);
 
 // ---------- Auth helpers ----------
 function requireLogin(req, res, next) {
-  if (!req.session.user) {
-    return res.redirect('/login.html');
-  }
+  if (!req.session.user) return res.redirect('/login.html');
   next();
 }
 
 function requireAdmin(req, res, next) {
-  console.log('requireAdmin session user:', req.session.user);
-  if (!req.session.user) {
-    return res.redirect('/login.html');
-  }
-  if (req.session.user.role !== 'admin') {
-    return res
-      .status(403)
-      .send(`Forbidden: you are logged in as "${req.session.user.username}", not an admin.`);
+  if (!req.session.user || req.session.user.role !== 'admin') {
+    return res.status(403).send('Admins only');
   }
   next();
 }
 
 // ---------- Routes ----------
 
-// LOGIN (with error message support)
-app.post('/login', (req, res) => {
-  const { username, password } = req.body;
-  const user = users[username];
+// LOGIN
+app.post('/login', async (req, res) => {
+  const { password } = req.body;
 
-  if (!user || user.password !== password) {
-    return res.redirect('/login.html?error=1');
+  if (await bcrypt.compare(password, adminHash)) {
+    req.session.user = { role: 'admin' };
+    return res.redirect('/admin.html');
   }
 
-  req.session.user = { username, role: user.role };
-  res.redirect('/dashboard.html');
-});
-
-// SIGNUP (create new member with validation)
-app.post('/signup', (req, res) => {
-  const { username, password } = req.body;
-
-  if (!username || !password) {
-    return res.redirect('/signup.html?error=required');
+  if (await bcrypt.compare(password, siteHash)) {
+    req.session.user = { role: 'viewer' };
+    return res.redirect('/dashboard.html');
   }
 
-  if (username.length < 3) {
-    return res.redirect('/signup.html?error=user_short');
-  }
-
-  if (password.length < 6) {
-    return res.redirect('/signup.html?error=pwd_short');
-  }
-
-  if (users[username]) {
-    return res.redirect('/signup.html?error=user_exists');
-  }
-
-  // create member user
-  users[username] = { password, role: 'member' };
-  console.log('New user created:', username, users[username]);
-
-  // auto-login as member
-  req.session.user = { username, role: 'member' };
-  res.redirect('/dashboard.html');
+  res.redirect('/login.html?error=1');
 });
 
 // LOGOUT
 app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.redirect('/');
-  });
+  req.session.destroy(() => res.redirect('/login.html'));
 });
 
-// UPLOAD (admin only)
+// UPLOAD
 app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
-  if (!req.file) {
-    return res.status(400).send('No file uploaded');
-  }
   res.redirect('/admin.html');
 });
 
-// LIST VIDEOS (logged-in users)
+// LIST VIDEOS
 app.get('/videos', requireLogin, (req, res) => {
-  let files = [];
-  try {
-    files = fs.readdirSync(uploadDir);
-  } catch (err) {
-    console.error('Error reading uploads folder', err);
-    files = [];
-  }
-
-  const videos = files.map((f) => ({ url: `/uploads/${f}` }));
-  res.json(videos);
+  const files = fs.readdirSync(uploadDir);
+  res.json(files.map((f) => ({ name: f })));
 });
 
-// DELETE VIDEO (admin only)
-app.delete('/delete-video/:name', requireAdmin, (req, res) => {
-  const fileName = req.params.name;
+// STREAM (ANTI-DOWNLOAD BEST EFFORT)
+app.get('/stream/:name', requireLogin, (req, res) => {
+  const fileName = path.basename(req.params.name);
   const filePath = path.join(uploadDir, fileName);
 
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).json({ error: 'File not found' });
-  }
+  if (!fs.existsSync(filePath)) return res.sendStatus(404);
 
-  fs.unlink(filePath, (err) => {
-    if (err) {
-      console.error('Delete error:', err);
-      return res.status(500).json({ error: 'Failed to delete video' });
-    }
-    res.json({ success: true });
-  });
+  res.setHeader('Content-Type', 'video/mp4');
+  res.setHeader('Accept-Ranges', 'bytes');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Content-Disposition', 'inline');
+
+  fs.createReadStream(filePath).pipe(res);
 });
 
-// CHECK AUTH (for frontend JS)
-app.get('/check-auth', (req, res) => {
-  if (!req.session.user) {
-    return res.status(401).json({ error: 'Not authorized' });
-  }
-  res.json({ user: req.session.user });
+// DELETE
+app.delete('/delete-video/:name', requireAdmin, (req, res) => {
+  const filePath = path.join(uploadDir, path.basename(req.params.name));
+  fs.unlinkSync(filePath);
+  res.json({ success: true });
 });
 
-// CHANGE PASSWORD (profile page)
-app.post('/change-password', requireLogin, (req, res) => {
-  const { currentPassword, newPassword, confirmPassword } = req.body;
-  const username = req.session.user.username;
-  const user = users[username];
-
-  if (!user) {
-    return res.redirect('/profile.html?error=not_found');
-  }
-
-  if (!currentPassword || !newPassword || !confirmPassword) {
-    return res.redirect('/profile.html?error=required');
-  }
-
-  if (user.password !== currentPassword) {
-    return res.redirect('/profile.html?error=wrong_current');
-  }
-
-  if (newPassword.length < 6) {
-    return res.redirect('/profile.html?error=pwd_short');
-  }
-
-  if (newPassword !== confirmPassword) {
-    return res.redirect('/profile.html?error=mismatch');
-  }
-
-  users[username].password = newPassword;
-  console.log('Password changed for', username);
-  res.redirect('/profile.html?status=success');
-});
-
-// ---------- Start server ----------
+// ---------- Start ----------
 app.listen(PORT, () => {
-  console.log(`YVideo running at http://localhost:${PORT}`);
+  console.log(`🔒 Secure Private Video Server running on ${PORT}`);
 });
