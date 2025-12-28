@@ -1,4 +1,3 @@
-// server.js
 require('dotenv').config();
 
 const express = require('express');
@@ -7,28 +6,35 @@ const fs = require('fs');
 const multer = require('multer');
 const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
-const cookieSession = require('cookie-session');
+const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// ---------- Simple token ----------
+const TOKEN_NAME = 'yvideo_token';
+const VIEWER_TOKEN = crypto
+  .createHash('sha256')
+  .update(process.env.SITE_PASSWORD)
+  .digest('hex');
+
+const ADMIN_TOKEN = crypto
+  .createHash('sha256')
+  .update(process.env.ADMIN_PASSWORD)
+  .digest('hex');
 
 // ---------- Middleware ----------
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// ---------- COOKIE SESSION (RENDER SAFE) ----------
-app.use(
-  cookieSession({
-    name: 'yvideo-session',
-    keys: [process.env.SESSION_SECRET],
-    maxAge: Number(process.env.SESSION_TIMEOUT) || 30 * 60 * 1000,
-    sameSite: 'lax',
-    secure: true, // Render is HTTPS
-    httpOnly: true,
-  })
-);
+// ---------- Cookie parser (manual) ----------
+function getCookie(req, name) {
+  const cookies = req.headers.cookie || '';
+  const match = cookies.match(new RegExp('(^| )' + name + '=([^;]+)'));
+  return match ? match[2] : null;
+}
 
-// ---------- Rate limit login ----------
+// ---------- Rate limit ----------
 app.use(
   '/login',
   rateLimit({
@@ -39,45 +45,34 @@ app.use(
 
 // ---------- Upload folder ----------
 const uploadDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
 
 // ---------- Multer ----------
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename(req, file, cb) {
-    cb(
-      null,
-      Date.now() + '-' + Math.round(Math.random() * 1e9) + path.extname(file.originalname)
-    );
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.diskStorage({
+    destination: uploadDir,
+    filename(req, file, cb) {
+      cb(null, Date.now() + '-' + file.originalname);
+    },
+  }),
   fileFilter(req, file, cb) {
-    if (!file.mimetype.startsWith('video/')) {
-      return cb(new Error('Video only'));
-    }
+    if (!file.mimetype.startsWith('video/')) return cb(new Error('Video only'));
     cb(null, true);
   },
 });
 
-// ---------- Password Hash ----------
-const siteHash = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
-const adminHash = bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10);
-
 // ---------- Auth helpers ----------
 function requireLogin(req, res, next) {
-  if (!req.session || !req.session.role) {
+  const token = getCookie(req, TOKEN_NAME);
+  if (token !== VIEWER_TOKEN && token !== ADMIN_TOKEN) {
     return res.redirect('/login.html');
   }
   next();
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.session || req.session.role !== 'admin') {
+  const token = getCookie(req, TOKEN_NAME);
+  if (token !== ADMIN_TOKEN) {
     return res.status(403).send('Admins only');
   }
   next();
@@ -86,16 +81,24 @@ function requireAdmin(req, res, next) {
 // ---------- Routes ----------
 
 // LOGIN
-app.post('/login', async (req, res) => {
+app.post('/login', (req, res) => {
   const { password } = req.body;
 
-  if (await bcrypt.compare(password, adminHash)) {
-    req.session.role = 'admin';
+  if (!password) return res.redirect('/login.html?error=1');
+
+  if (bcrypt.compareSync(password, process.env.ADMIN_PASSWORD)) {
+    res.setHeader(
+      'Set-Cookie',
+      `${TOKEN_NAME}=${ADMIN_TOKEN}; Path=/; HttpOnly; SameSite=Lax`
+    );
     return res.redirect('/admin.html');
   }
 
-  if (await bcrypt.compare(password, siteHash)) {
-    req.session.role = 'viewer';
+  if (bcrypt.compareSync(password, process.env.SITE_PASSWORD)) {
+    res.setHeader(
+      'Set-Cookie',
+      `${TOKEN_NAME}=${VIEWER_TOKEN}; Path=/; HttpOnly; SameSite=Lax`
+    );
     return res.redirect('/dashboard.html');
   }
 
@@ -104,13 +107,11 @@ app.post('/login', async (req, res) => {
 
 // LOGOUT
 app.get('/logout', (req, res) => {
-  req.session = null;
+  res.setHeader(
+    'Set-Cookie',
+    `${TOKEN_NAME}=; Path=/; Max-Age=0`
+  );
   res.redirect('/login.html');
-});
-
-// UPLOAD
-app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
-  res.redirect('/admin.html');
 });
 
 // LIST VIDEOS
@@ -123,12 +124,12 @@ app.get('/videos', requireLogin, (req, res) => {
 app.get('/stream/:name', requireLogin, (req, res) => {
   const filePath = path.join(uploadDir, path.basename(req.params.name));
   if (!fs.existsSync(filePath)) return res.sendStatus(404);
-
-  res.setHeader('Content-Type', 'video/mp4');
-  res.setHeader('Cache-Control', 'no-store');
-  res.setHeader('Content-Disposition', 'inline');
-
   fs.createReadStream(filePath).pipe(res);
+});
+
+// UPLOAD
+app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
+  res.redirect('/admin.html');
 });
 
 // DELETE
@@ -139,5 +140,5 @@ app.delete('/delete-video/:name', requireAdmin, (req, res) => {
 
 // ---------- Start ----------
 app.listen(PORT, () => {
-  console.log(`✅ YVideo running securely on port ${PORT}`);
+  console.log(`✅ YVideo running on port ${PORT}`);
 });
