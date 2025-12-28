@@ -12,14 +12,14 @@ const rateLimit = require('express-rate-limit');
 const app = express();
 
 /**
- * IMPORTANT FOR RENDER / HTTPS
- * This FIXES the "login then immediately logout" bug
+ * 🔴 REQUIRED FOR RENDER (HTTPS behind proxy)
+ * This prevents login -> instant logout
  */
 app.set('trust proxy', 1);
 
 const PORT = process.env.PORT || 3000;
 
-// ---------- IP WHITELIST ----------
+// ---------- IP WHITELIST (optional) ----------
 const allowedIPs = process.env.ALLOWED_IPS
   ? process.env.ALLOWED_IPS.split(',').map((ip) => ip.trim())
   : [];
@@ -43,15 +43,18 @@ if (!fs.existsSync(uploadDir)) {
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// ---------- Session ----------
+// ---------- SESSION (FINAL FIX) ----------
 app.use(
   session({
+    name: 'yvideo.sid',
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
+    proxy: true, // 🔴 REQUIRED on Render
     cookie: {
       httpOnly: true,
-      sameSite: 'lax', // 🔴 FIXED (was strict)
+      secure: true, // 🔴 REQUIRED for HTTPS (Render)
+      sameSite: 'lax',
       maxAge: Number(process.env.SESSION_TIMEOUT) || 30 * 60 * 1000,
     },
   })
@@ -87,7 +90,7 @@ const upload = multer({
     }
     cb(null, true);
   },
-  limits: { fileSize: 500 * 1024 * 1024 }, // 500MB
+  limits: { fileSize: 500 * 1024 * 1024 },
 });
 
 // ---------- Password Hash ----------
