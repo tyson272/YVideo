@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin</title>
+  <title>Admin Panel</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -12,14 +12,79 @@
     <a href="/logout">Logout</a>
   </div>
 
-  <div class="admin-box">
-    <form action="/upload" method="POST" enctype="multipart/form-data">
-      <input type="text" name="album" placeholder="Album name" required />
-      <input type="file" name="media" accept="image/*,video/*" required />
-      <button>Upload</button>
-    </form>
+  <!-- Upload box -->
+  <div class="admin-box" id="dropZone">
+    <input id="album" type="text" placeholder="Album name" />
+    <input id="fileInput" type="file" multiple accept="image/*,video/*" hidden />
+    <p>Drag & drop files here or click</p>
   </div>
+
+  <h2>Your Media</h2>
+  <div id="media"></div>
 </div>
 
+<script>
+const dropZone = document.getElementById('dropZone');
+const fileInput = document.getElementById('fileInput');
+
+dropZone.onclick = () => fileInput.click();
+
+dropZone.ondragover = e => {
+  e.preventDefault();
+  dropZone.style.border = '2px dashed #38bdf8';
+};
+
+dropZone.ondragleave = () => {
+  dropZone.style.border = 'none';
+};
+
+dropZone.ondrop = e => {
+  e.preventDefault();
+  uploadFiles(e.dataTransfer.files);
+};
+
+fileInput.onchange = () => uploadFiles(fileInput.files);
+
+async function uploadFiles(files) {
+  const album = document.getElementById('album').value || 'general';
+  for (const file of files) {
+    const fd = new FormData();
+    fd.append('album', album);
+    fd.append('media', file);
+    await fetch('/upload', { method: 'POST', body: fd });
+  }
+  loadMedia();
+}
+
+async function loadMedia() {
+  const res = await fetch('/media');
+  const albums = await res.json();
+  const container = document.getElementById('media');
+  container.innerHTML = '';
+
+  albums.forEach(a => {
+    container.innerHTML += `<h3>${a.album}</h3>`;
+    a.files.forEach(f => {
+      container.innerHTML += `
+        <div>
+          ${f.match(/\.(mp4|webm)$/)
+            ? `<video src="/media/${a.album}/${f}" width="200" controls></video>`
+            : `<img src="/media/${a.album}/${f}" width="200" />`
+          }
+          <button onclick="del('${a.album}','${f}')">Delete</button>
+        </div>
+      `;
+    });
+  });
+}
+
+async function del(album, file) {
+  if (!confirm('Delete this file?')) return;
+  await fetch(`/delete/${album}/${file}`, { method: 'DELETE' });
+  loadMedia();
+}
+
+loadMedia();
+</script>
 </body>
 </html>
