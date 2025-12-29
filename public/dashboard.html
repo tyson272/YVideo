@@ -2,21 +2,23 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Dashboard – YVideo</title>
+  <title>Library – YVideo</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
-  <h2>Video Library</h2>
-  <a href="/logout">Logout</a>
+<body class="bg-black text-white min-h-screen">
 
-  <hr />
-  <div id="status">Loading videos...</div>
-  <div id="videos"></div>
+  <header class="flex justify-between items-center p-4 border-b border-zinc-800">
+    <h1 class="text-xl font-bold">YVideo</h1>
+    <a href="/logout" class="text-sm text-gray-400 hover:text-white">Logout</a>
+  </header>
+
+  <main class="p-6">
+    <div id="status" class="text-gray-400 mb-4">Loading…</div>
+    <div id="videos" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
+  </main>
 
   <script>
     async function loadVideos() {
-      const status = document.getElementById('status');
-      const container = document.getElementById('videos');
-
       const res = await fetch('/videos');
       if (!res.ok) {
         location.href = '/login.html';
@@ -24,7 +26,10 @@
       }
 
       const videos = await res.json();
-      container.innerHTML = '';
+      const grid = document.getElementById('videos');
+      const status = document.getElementById('status');
+
+      grid.innerHTML = '';
 
       if (!videos.length) {
         status.textContent = 'No videos available';
@@ -37,13 +42,13 @@
         const video = document.createElement('video');
         video.src = `/stream/${encodeURIComponent(v.name)}`;
         video.controls = true;
-        video.style.display = 'block';
-        video.style.marginBottom = '20px';
-        container.appendChild(video);
+        video.className = 'w-full rounded-lg';
+        grid.appendChild(video);
       });
     }
 
     loadVideos();
   </script>
+
 </body>
 </html>
