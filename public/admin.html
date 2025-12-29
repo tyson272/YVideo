@@ -1,69 +1,75 @@
-<script>
-  let allVideos = [];
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Admin – YVideo</title>
+</head>
+<body>
+  <h2>Admin Panel</h2>
+  <a href="/logout">Logout</a>
 
-  async function loadVideos() {
-    const stateEl = document.getElementById('adminState');
-    const container = document.getElementById('adminVideos');
+  <hr />
+  <h3>Upload Video</h3>
 
-    stateEl.textContent = 'Loading videos…';
-    container.innerHTML = '';
+  <form action="/upload" method="POST" enctype="multipart/form-data">
+    <input type="file" name="video" accept="video/*" required />
+    <button type="submit">Upload</button>
+  </form>
 
-    const res = await fetch('/videos');
-    if (!res.ok) {
-      window.location.href = '/login.html';
-      return;
-    }
+  <hr />
+  <h3>Videos</h3>
+  <div id="status">Loading...</div>
+  <div id="videos"></div>
 
-    const data = await res.json();
-    allVideos = data;
+  <script>
+    async function loadVideos() {
+      const status = document.getElementById('status');
+      const container = document.getElementById('videos');
 
-    if (!data.length) {
-      stateEl.textContent = 'No videos uploaded yet.';
-      return;
-    }
+      const res = await fetch('/videos');
+      if (!res.ok) {
+        status.textContent = 'Not authorized';
+        return;
+      }
 
-    stateEl.textContent = '';
-    renderAdminVideos(data);
-  }
+      const videos = await res.json();
+      container.innerHTML = '';
 
-  function renderAdminVideos(videos) {
-    const container = document.getElementById('adminVideos');
-    container.innerHTML = '';
+      if (!videos.length) {
+        status.textContent = 'No videos uploaded';
+        return;
+      }
 
-    videos.forEach(v => {
-      const fileName = v.name;
+      status.textContent = '';
 
-      const card = document.createElement('div');
-      card.className = 'video-card';
+      videos.forEach(v => {
+        const div = document.createElement('div');
 
-      const videoEl = document.createElement('video');
-      videoEl.src = `/stream/${encodeURIComponent(fileName)}`;
-      videoEl.controls = true;
+        const video = document.createElement('video');
+        video.src = `/stream/${encodeURIComponent(v.name)}`;
+        video.controls = true;
+        video.width = 300;
 
-      const title = document.createElement('div');
-      title.textContent = fileName;
-
-      const delBtn = document.createElement('button');
-      delBtn.textContent = 'Delete';
-      delBtn.onclick = async () => {
-        if (!confirm(`Delete ${fileName}?`)) return;
-        const res = await fetch(`/delete-video/${encodeURIComponent(fileName)}`, {
-          method: 'DELETE',
-        });
-        if (res.ok) {
+        const del = document.createElement('button');
+        del.textContent = 'Delete';
+        del.onclick = async () => {
+          if (!confirm('Delete this video?')) return;
+          await fetch(`/delete-video/${encodeURIComponent(v.name)}`, {
+            method: 'DELETE'
+          });
           loadVideos();
-        } else {
-          alert('Failed to delete.');
-        }
-      };
+        };
 
-      card.appendChild(videoEl);
-      card.appendChild(title);
-      card.appendChild(delBtn);
-      container.appendChild(card);
-    });
-  }
+        div.appendChild(video);
+        div.appendChild(document.createElement('br'));
+        div.appendChild(del);
+        div.appendChild(document.createElement('hr'));
 
-  // INIT
-  loadVideos();
-</script>
+        container.appendChild(div);
+      });
+    }
+
+    loadVideos();
+  </script>
+</body>
+</html>

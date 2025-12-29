@@ -1,73 +1,49 @@
-<script>
-  let allVideos = [];
-  let isAdmin = true; // viewer can still see videos
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Dashboard – YVideo</title>
+</head>
+<body>
+  <h2>Video Library</h2>
+  <a href="/logout">Logout</a>
 
-  async function loadVideos() {
-    const stateEl = document.getElementById('stateMessage');
-    const grid = document.getElementById('videoGrid');
+  <hr />
+  <div id="status">Loading videos...</div>
+  <div id="videos"></div>
 
-    stateEl.textContent = 'Loading videos…';
-    grid.innerHTML = '';
+  <script>
+    async function loadVideos() {
+      const status = document.getElementById('status');
+      const container = document.getElementById('videos');
 
-    try {
       const res = await fetch('/videos');
       if (!res.ok) {
-        window.location.href = '/login.html';
+        location.href = '/login.html';
         return;
       }
 
-      const data = await res.json();
-      allVideos = data;
+      const videos = await res.json();
+      container.innerHTML = '';
 
-      if (!data.length) {
-        stateEl.textContent = 'No videos yet.';
+      if (!videos.length) {
+        status.textContent = 'No videos available';
         return;
       }
 
-      stateEl.textContent = '';
-      renderVideos(data);
-    } catch (err) {
-      console.error(err);
-      stateEl.textContent = 'Error loading videos';
+      status.textContent = '';
+
+      videos.forEach(v => {
+        const video = document.createElement('video');
+        video.src = `/stream/${encodeURIComponent(v.name)}`;
+        video.controls = true;
+        video.style.display = 'block';
+        video.style.marginBottom = '20px';
+        container.appendChild(video);
+      });
     }
-  }
 
-  function renderVideos(videos) {
-    const grid = document.getElementById('videoGrid');
-    grid.innerHTML = '';
-
-    videos.forEach(v => {
-      const fileName = v.name;
-
-      const card = document.createElement('div');
-      card.className = 'video-card';
-
-      const videoEl = document.createElement('video');
-      videoEl.src = `/stream/${encodeURIComponent(fileName)}`;
-      videoEl.controls = true;
-
-      card.appendChild(videoEl);
-      grid.appendChild(card);
-    });
-  }
-
-  function setupSearch() {
-    const input = document.getElementById('searchInput');
-    input.addEventListener('input', () => {
-      const q = input.value.toLowerCase().trim();
-      if (!q) {
-        renderVideos(allVideos);
-        return;
-      }
-      const filtered = allVideos.filter(v =>
-        v.name.toLowerCase().includes(q)
-      );
-      renderVideos(filtered);
-    });
-  }
-
-  (function init() {
-    setupSearch();
     loadVideos();
-  })();
-</script>
+  </script>
+</body>
+</html>

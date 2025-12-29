@@ -2,49 +2,22 @@
 <html>
 <head>
   <meta charset="UTF-8" />
-  <title>Private Login – YVideo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="style.css" />
+  <title>Login – YVideo</title>
 </head>
 <body>
-  <div class="page">
-    <div class="card">
-      <h1>Private Access</h1>
-      <p>Enter the private password to continue.</p>
+  <h2>Private Login</h2>
 
-      <!-- Error box -->
-      <div id="errorMsg" style="
-        display:none;
-        background:#fee2e2;
-        color:#991b1b;
-        padding:10px;
-        border-radius:10px;
-        text-align:center;
-        margin-bottom:12px;
-        font-size:14px;
-      ">
-        ❌ Incorrect password
-      </div>
+  <form method="POST" action="/login">
+    <input type="password" name="password" placeholder="Enter password" required />
+    <br /><br />
+    <button type="submit">Login</button>
+  </form>
 
-      <form method="POST" action="/login">
-        <div class="form-group">
-          <label>Private Password</label>
-          <input type="password" name="password" required />
-        </div>
-
-        <button type="submit" class="primary">Enter</button>
-      </form>
-
-      <div class="card-footer">
-        <small>🔒 This is a private site</small>
-      </div>
-    </div>
-  </div>
+  <p id="error" style="color:red;"></p>
 
   <script>
-    const params = new URLSearchParams(window.location.search);
-    if (params.get('error')) {
-      document.getElementById('errorMsg').style.display = 'block';
+    if (new URLSearchParams(location.search).get('error')) {
+      document.getElementById('error').textContent = 'Incorrect password';
     }
   </script>
 </body>
