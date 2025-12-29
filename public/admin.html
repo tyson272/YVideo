@@ -1,81 +1,23 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>Admin – YVideo</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-black text-white min-h-screen">
+<form action="/upload" method="POST" enctype="multipart/form-data"
+      class="bg-zinc-900 p-4 rounded-lg space-y-3">
 
-  <header class="flex justify-between items-center p-4 border-b border-zinc-800">
-    <h1 class="text-xl font-bold">Admin Panel</h1>
-    <a href="/logout" class="text-sm text-gray-400 hover:text-white">Logout</a>
-  </header>
+  <input
+    type="text"
+    name="album"
+    placeholder="Album name (e.g. travel, events)"
+    required
+    class="w-full p-2 rounded bg-zinc-800"
+  />
 
-  <main class="p-6 space-y-6">
+  <input
+    type="file"
+    name="media"
+    accept="image/*,video/*"
+    required
+    class="w-full"
+  />
 
-    <form action="/upload" method="POST" enctype="multipart/form-data"
-          class="bg-zinc-900 p-4 rounded-lg">
-      <input type="file" name="video" accept="video/*" required />
-      <button class="ml-4 px-4 py-2 bg-red-600 rounded hover:bg-red-700">
-        Upload
-      </button>
-    </form>
-
-    <div id="status" class="text-gray-400">Loading…</div>
-    <div id="videos" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
-
-  </main>
-
-  <script>
-    async function loadVideos() {
-      const res = await fetch('/videos');
-      if (!res.ok) {
-        document.getElementById('status').textContent = 'Not authorized';
-        return;
-      }
-
-      const videos = await res.json();
-      const grid = document.getElementById('videos');
-      const status = document.getElementById('status');
-
-      grid.innerHTML = '';
-
-      if (!videos.length) {
-        status.textContent = 'No videos uploaded';
-        return;
-      }
-
-      status.textContent = '';
-
-      videos.forEach(v => {
-        const card = document.createElement('div');
-        card.className = 'space-y-2';
-
-        const video = document.createElement('video');
-        video.src = `/stream/${encodeURIComponent(v.name)}`;
-        video.controls = true;
-        video.className = 'w-full rounded';
-
-        const del = document.createElement('button');
-        del.textContent = 'Delete';
-        del.className = 'text-red-500 text-sm';
-        del.onclick = async () => {
-          if (!confirm('Delete this video?')) return;
-          await fetch(`/delete-video/${encodeURIComponent(v.name)}`, {
-            method: 'DELETE'
-          });
-          loadVideos();
-        };
-
-        card.appendChild(video);
-        card.appendChild(del);
-        grid.appendChild(card);
-      });
-    }
-
-    loadVideos();
-  </script>
-
-</body>
-</html>
+  <button class="px-4 py-2 bg-red-600 rounded hover:bg-red-700">
+    Upload
+  </button>
+</form>

@@ -1,54 +1,41 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>Library – YVideo</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-black text-white min-h-screen">
+<script>
+async function loadMedia() {
+  const res = await fetch('/media');
+  if (!res.ok) {
+    location.href = '/login.html';
+    return;
+  }
 
-  <header class="flex justify-between items-center p-4 border-b border-zinc-800">
-    <h1 class="text-xl font-bold">YVideo</h1>
-    <a href="/logout" class="text-sm text-gray-400 hover:text-white">Logout</a>
-  </header>
+  const albums = await res.json();
+  const container = document.getElementById('videos');
+  container.innerHTML = '';
 
-  <main class="p-6">
-    <div id="status" class="text-gray-400 mb-4">Loading…</div>
-    <div id="videos" class="grid grid-cols-1 md:grid-cols-3 gap-6"></div>
-  </main>
+  albums.forEach(a => {
+    const section = document.createElement('div');
+    section.innerHTML = `<h2 class="text-xl mb-4">${a.album}</h2>`;
+    section.className = 'mb-8';
 
-  <script>
-    async function loadVideos() {
-      const res = await fetch('/videos');
-      if (!res.ok) {
-        location.href = '/login.html';
-        return;
+    const grid = document.createElement('div');
+    grid.className = 'grid grid-cols-1 md:grid-cols-3 gap-4';
+
+    a.files.forEach(f => {
+      let el;
+      if (f.match(/\.(mp4|webm|ogg)$/)) {
+        el = document.createElement('video');
+        el.controls = true;
+      } else {
+        el = document.createElement('img');
       }
+      el.src = `/media/${a.album}/${encodeURIComponent(f)}`;
+      el.className = 'rounded-lg w-full';
 
-      const videos = await res.json();
-      const grid = document.getElementById('videos');
-      const status = document.getElementById('status');
+      grid.appendChild(el);
+    });
 
-      grid.innerHTML = '';
+    section.appendChild(grid);
+    container.appendChild(section);
+  });
+}
 
-      if (!videos.length) {
-        status.textContent = 'No videos available';
-        return;
-      }
-
-      status.textContent = '';
-
-      videos.forEach(v => {
-        const video = document.createElement('video');
-        video.src = `/stream/${encodeURIComponent(v.name)}`;
-        video.controls = true;
-        video.className = 'w-full rounded-lg';
-        grid.appendChild(video);
-      });
-    }
-
-    loadVideos();
-  </script>
-
-</body>
-</html>
+loadMedia();
+</script>
