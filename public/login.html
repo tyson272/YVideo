@@ -1,39 +1,22 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
-  <title>Login – YVideo</title>
-  <script src="https://cdn.tailwindcss.com"></script>
+  <title>Login</title>
 </head>
-<body class="bg-black text-white min-h-screen flex items-center justify-center">
+<body>
+  <h2>Login</h2>
 
-  <div class="bg-zinc-900 p-8 rounded-xl w-80">
-    <h2 class="text-2xl font-semibold mb-4 text-center">Private Access</h2>
+  <form method="POST" action="/login">
+    <input type="password" name="password" placeholder="Password" required />
+    <button type="submit">Login</button>
+  </form>
 
-    <form method="POST" action="/login" class="space-y-4">
-      <input
-        type="password"
-        name="password"
-        placeholder="Password"
-        required
-        class="w-full px-4 py-2 rounded bg-zinc-800 focus:outline-none"
-      />
-
-      <button
-        type="submit"
-        class="w-full bg-red-600 py-2 rounded hover:bg-red-700">
-        Enter
-      </button>
-    </form>
-
-    <p id="error" class="text-red-500 mt-4 text-center text-sm"></p>
-  </div>
-
-  <script>
-    if (new URLSearchParams(location.search).get('error')) {
-      document.getElementById('error').textContent = 'Wrong password';
-    }
-  </script>
-
+  <p style="color:red;">
+    <script>
+      if (location.search.includes('error')) {
+        document.write('Wrong password');
+      }
+    </script>
+  </p>
 </body>
 </html>

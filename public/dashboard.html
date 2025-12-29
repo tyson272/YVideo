@@ -1,5 +1,22 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gallery</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body oncontextmenu="return false">
+
+<div class="container">
+  <div class="top-bar">
+    <h1>Gallery</h1>
+    <a href="/logout">Logout</a>
+  </div>
+
+  <div id="gallery"></div>
+</div>
+
 <script>
-async function loadMedia() {
+async function loadGallery() {
   const res = await fetch('/media');
   if (!res.ok) {
     location.href = '/login.html';
@@ -7,29 +24,32 @@ async function loadMedia() {
   }
 
   const albums = await res.json();
-  const container = document.getElementById('videos');
-  container.innerHTML = '';
+  const container = document.getElementById('gallery');
 
   albums.forEach(a => {
     const section = document.createElement('div');
-    section.innerHTML = `<h2 class="text-xl mb-4">${a.album}</h2>`;
-    section.className = 'mb-8';
+    section.className = 'album';
+
+    section.innerHTML = `<div class="album-title">${a.album}</div>`;
 
     const grid = document.createElement('div');
-    grid.className = 'grid grid-cols-1 md:grid-cols-3 gap-4';
+    grid.className = 'grid';
 
     a.files.forEach(f => {
-      let el;
-      if (f.match(/\.(mp4|webm|ogg)$/)) {
-        el = document.createElement('video');
-        el.controls = true;
-      } else {
-        el = document.createElement('img');
-      }
-      el.src = `/media/${a.album}/${encodeURIComponent(f)}`;
-      el.className = 'rounded-lg w-full';
+      const card = document.createElement('div');
+      card.className = 'card';
 
-      grid.appendChild(el);
+      if (f.match(/\.(mp4|webm)$/)) {
+        card.innerHTML = `
+          <video src="/media/${a.album}/${f}" controls controlsList="nodownload"></video>
+        `;
+      } else {
+        card.innerHTML = `
+          <img src="/media/${a.album}/${f}" draggable="false" />
+        `;
+      }
+
+      grid.appendChild(card);
     });
 
     section.appendChild(grid);
@@ -37,5 +57,7 @@ async function loadMedia() {
   });
 }
 
-loadMedia();
+loadGallery();
 </script>
+</body>
+</html>

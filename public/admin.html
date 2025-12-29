@@ -1,23 +1,25 @@
-<form action="/upload" method="POST" enctype="multipart/form-data"
-      class="bg-zinc-900 p-4 rounded-lg space-y-3">
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
 
-  <input
-    type="text"
-    name="album"
-    placeholder="Album name (e.g. travel, events)"
-    required
-    class="w-full p-2 rounded bg-zinc-800"
-  />
+<div class="container">
+  <div class="top-bar">
+    <h1>Admin Panel</h1>
+    <a href="/logout">Logout</a>
+  </div>
 
-  <input
-    type="file"
-    name="media"
-    accept="image/*,video/*"
-    required
-    class="w-full"
-  />
+  <div class="admin-box">
+    <form action="/upload" method="POST" enctype="multipart/form-data">
+      <input type="text" name="album" placeholder="Album name" required />
+      <input type="file" name="media" accept="image/*,video/*" required />
+      <button>Upload</button>
+    </form>
+  </div>
+</div>
 
-  <button class="px-4 py-2 bg-red-600 rounded hover:bg-red-700">
-    Upload
-  </button>
-</form>
+</body>
+</html>
