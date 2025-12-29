@@ -4,30 +4,22 @@ const express = require('express');
 const path = require('path');
 const fs = require('fs');
 const multer = require('multer');
-const bcrypt = require('bcrypt');
 const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- Simple token ----------
+// ---------- Tokens ----------
 const TOKEN_NAME = 'yvideo_token';
-const VIEWER_TOKEN = crypto
-  .createHash('sha256')
-  .update(process.env.SITE_PASSWORD)
-  .digest('hex');
-
-const ADMIN_TOKEN = crypto
-  .createHash('sha256')
-  .update(process.env.ADMIN_PASSWORD)
-  .digest('hex');
+const VIEWER_TOKEN = crypto.createHash('sha256').update(process.env.SITE_PASSWORD).digest('hex');
+const ADMIN_TOKEN = crypto.createHash('sha256').update(process.env.ADMIN_PASSWORD).digest('hex');
 
 // ---------- Middleware ----------
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
-// ---------- Cookie parser (manual) ----------
+// ---------- Cookie reader ----------
 function getCookie(req, name) {
   const cookies = req.headers.cookie || '';
   const match = cookies.match(new RegExp('(^| )' + name + '=([^;]+)'));
@@ -35,13 +27,7 @@ function getCookie(req, name) {
 }
 
 // ---------- Rate limit ----------
-app.use(
-  '/login',
-  rateLimit({
-    windowMs: 5 * 60 * 1000,
-    max: 10,
-  })
-);
+app.use('/login', rateLimit({ windowMs: 5 * 60 * 1000, max: 10 }));
 
 // ---------- Upload folder ----------
 const uploadDir = path.join(__dirname, 'uploads');
@@ -55,16 +41,12 @@ const upload = multer({
       cb(null, Date.now() + '-' + file.originalname);
     },
   }),
-  fileFilter(req, file, cb) {
-    if (!file.mimetype.startsWith('video/')) return cb(new Error('Video only'));
-    cb(null, true);
-  },
 });
 
-// ---------- Auth helpers ----------
+// ---------- Auth ----------
 function requireLogin(req, res, next) {
   const token = getCookie(req, TOKEN_NAME);
-  if (token !== VIEWER_TOKEN && token !== ADMIN_TOKEN) {
+  if (![VIEWER_TOKEN, ADMIN_TOKEN].includes(token)) {
     return res.redirect('/login.html');
   }
   next();
@@ -78,26 +60,22 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// ---------- Routes ----------
-
-// LOGIN
+// ---------- LOGIN ----------
 app.post('/login', (req, res) => {
   const { password } = req.body;
 
-  if (!password) return res.redirect('/login.html?error=1');
-
-  if (bcrypt.compareSync(password, process.env.ADMIN_PASSWORD)) {
+  if (password === process.env.ADMIN_PASSWORD) {
     res.setHeader(
       'Set-Cookie',
-      `${TOKEN_NAME}=${ADMIN_TOKEN}; Path=/; HttpOnly; SameSite=Lax`
+      `${TOKEN_NAME}=${ADMIN_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax`
     );
     return res.redirect('/admin.html');
   }
 
-  if (bcrypt.compareSync(password, process.env.SITE_PASSWORD)) {
+  if (password === process.env.SITE_PASSWORD) {
     res.setHeader(
       'Set-Cookie',
-      `${TOKEN_NAME}=${VIEWER_TOKEN}; Path=/; HttpOnly; SameSite=Lax`
+      `${TOKEN_NAME}=${VIEWER_TOKEN}; Path=/; HttpOnly; Secure; SameSite=Lax`
     );
     return res.redirect('/dashboard.html');
   }
@@ -105,34 +83,30 @@ app.post('/login', (req, res) => {
   res.redirect('/login.html?error=1');
 });
 
-// LOGOUT
+// ---------- LOGOUT ----------
 app.get('/logout', (req, res) => {
   res.setHeader(
     'Set-Cookie',
-    `${TOKEN_NAME}=; Path=/; Max-Age=0`
+    `${TOKEN_NAME}=; Path=/; Max-Age=0; Secure; SameSite=Lax`
   );
   res.redirect('/login.html');
 });
 
-// LIST VIDEOS
+// ---------- API ----------
 app.get('/videos', requireLogin, (req, res) => {
-  const files = fs.readdirSync(uploadDir);
-  res.json(files.map((f) => ({ name: f })));
+  res.json(fs.readdirSync(uploadDir).map((f) => ({ name: f })));
 });
 
-// STREAM
 app.get('/stream/:name', requireLogin, (req, res) => {
   const filePath = path.join(uploadDir, path.basename(req.params.name));
   if (!fs.existsSync(filePath)) return res.sendStatus(404);
   fs.createReadStream(filePath).pipe(res);
 });
 
-// UPLOAD
 app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
   res.redirect('/admin.html');
 });
 
-// DELETE
 app.delete('/delete-video/:name', requireAdmin, (req, res) => {
   fs.unlinkSync(path.join(uploadDir, path.basename(req.params.name)));
   res.json({ success: true });
@@ -140,5 +114,5 @@ app.delete('/delete-video/:name', requireAdmin, (req, res) => {
 
 // ---------- Start ----------
 app.listen(PORT, () => {
-  console.log(`✅ YVideo running on port ${PORT}`);
+  console.log('✅ YVideo running');
 });
