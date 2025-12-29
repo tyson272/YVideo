@@ -1,183 +1,73 @@
-<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8" />
-  <title>YVideo</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="style.css" />
-</head>
+<script>
+  let allVideos = [];
+  let isAdmin = true; // viewer can still see videos
 
-<body>
-  <div class="app-shell">
-    <!-- Top bar -->
-    <header class="app-header">
-      <h1>YVideo Library</h1>
-      <div class="right-actions">
-        <a href="admin.html">Upload video</a>
-        <a href="/logout">Logout</a>
-      </div>
-    </header>
+  async function loadVideos() {
+    const stateEl = document.getElementById('stateMessage');
+    const grid = document.getElementById('videoGrid');
 
-    <!-- Main -->
-    <main class="app-main">
-      <h2 class="section-title">Your videos</h2>
-      <p class="section-subtitle">
-        All videos you’ve uploaded. Only logged-in members can see this page.
-      </p>
+    stateEl.textContent = 'Loading videos…';
+    grid.innerHTML = '';
 
-      <div class="toolbar">
-        <div class="search-box">
-          <input id="searchInput" type="text" placeholder="Search by filename…">
-        </div>
-      </div>
-
-      <div id="stateMessage" class="state-message"></div>
-
-      <div id="videoGrid" class="video-grid"></div>
-    </main>
-  </div>
-
-  <script>
-    let allVideos = [];
-    let isAdmin = false; // will be set after /check-auth
-
-    async function checkAuth() {
-      const res = await fetch('/check-auth');
+    try {
+      const res = await fetch('/videos');
       if (!res.ok) {
         window.location.href = '/login.html';
         return;
       }
+
       const data = await res.json();
-      isAdmin = data.user && data.user.role === 'admin';
-    }
+      allVideos = data;
 
-    async function loadVideos() {
-      const stateEl = document.getElementById('stateMessage');
-      const grid = document.getElementById('videoGrid');
-
-      stateEl.textContent = 'Loading videos…';
-      stateEl.classList.remove('error');
-      grid.innerHTML = '';
-
-      try {
-        const res = await fetch('/videos');
-        if (!res.ok) {
-          stateEl.textContent = 'Could not load videos.';
-          stateEl.classList.add('error');
-          return;
-        }
-
-        const data = await res.json();
-        allVideos = data;
-
-        if (!data.length) {
-          stateEl.textContent = 'No videos yet. Upload your first video from the top-right.';
-          return;
-        }
-
-        stateEl.textContent = '';
-        renderVideos(data);
-      } catch (err) {
-        console.error(err);
-        stateEl.textContent = 'Something went wrong while loading videos.';
-        stateEl.classList.add('error');
+      if (!data.length) {
+        stateEl.textContent = 'No videos yet.';
+        return;
       }
+
+      stateEl.textContent = '';
+      renderVideos(data);
+    } catch (err) {
+      console.error(err);
+      stateEl.textContent = 'Error loading videos';
     }
+  }
 
-    function renderVideos(videos) {
-      const grid = document.getElementById('videoGrid');
-      grid.innerHTML = '';
+  function renderVideos(videos) {
+    const grid = document.getElementById('videoGrid');
+    grid.innerHTML = '';
 
-      videos.forEach(v => {
-        const fileName = v.url.split('/').pop();
-        const displayName = fileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ');
+    videos.forEach(v => {
+      const fileName = v.name;
 
-        const card = document.createElement('div');
-        card.className = 'video-card';
+      const card = document.createElement('div');
+      card.className = 'video-card';
 
-        const thumb = document.createElement('div');
-        thumb.className = 'video-thumb';
+      const videoEl = document.createElement('video');
+      videoEl.src = `/stream/${encodeURIComponent(fileName)}`;
+      videoEl.controls = true;
 
-        const videoEl = document.createElement('video');
-        videoEl.src = v.url;
-        videoEl.controls = true;
+      card.appendChild(videoEl);
+      grid.appendChild(card);
+    });
+  }
 
-        thumb.appendChild(videoEl);
+  function setupSearch() {
+    const input = document.getElementById('searchInput');
+    input.addEventListener('input', () => {
+      const q = input.value.toLowerCase().trim();
+      if (!q) {
+        renderVideos(allVideos);
+        return;
+      }
+      const filtered = allVideos.filter(v =>
+        v.name.toLowerCase().includes(q)
+      );
+      renderVideos(filtered);
+    });
+  }
 
-        const meta = document.createElement('div');
-        meta.className = 'video-meta';
-
-        const title = document.createElement('div');
-        title.className = 'video-title';
-        title.textContent = displayName || 'Untitled video';
-
-        const filename = document.createElement('div');
-        filename.className = 'video-filename';
-        filename.textContent = fileName;
-
-        meta.appendChild(title);
-        meta.appendChild(filename);
-
-        // -------- Delete button (admin only) --------
-        if (isAdmin) {
-          const delBtn = document.createElement('button');
-          delBtn.textContent = 'Delete';
-          delBtn.style.marginTop = '8px';
-          delBtn.style.border = 'none';
-          delBtn.style.background = '#ef4444';
-          delBtn.style.color = 'white';
-          delBtn.style.padding = '6px 10px';
-          delBtn.style.borderRadius = '8px';
-          delBtn.style.cursor = 'pointer';
-
-          delBtn.onclick = async () => {
-            const confirmDel = confirm(`Delete ${fileName}?`);
-            if (!confirmDel) return;
-
-            const res = await fetch(`/delete-video/${encodeURIComponent(fileName)}`, {
-              method: 'DELETE'
-            });
-
-            if (res.ok) {
-              alert('Video deleted');
-              loadVideos(); // refresh
-            } else {
-              alert('Failed to delete video');
-            }
-          };
-
-          meta.appendChild(delBtn);
-        }
-
-        card.appendChild(thumb);
-        card.appendChild(meta);
-
-        grid.appendChild(card);
-      });
-    }
-
-    // Simple client-side search
-    function setupSearch() {
-      const input = document.getElementById('searchInput');
-      input.addEventListener('input', () => {
-        const q = input.value.toLowerCase().trim();
-        if (!q) {
-          renderVideos(allVideos);
-          return;
-        }
-        const filtered = allVideos.filter(v => {
-          const name = v.url.split('/').pop().toLowerCase();
-          return name.includes(q);
-        });
-        renderVideos(filtered);
-      });
-    }
-
-    (async function init() {
-      await checkAuth();
-      setupSearch();
-      loadVideos();
-    })();
-  </script>
-</body>
-</html>
+  (function init() {
+    setupSearch();
+    loadVideos();
+  })();
+</script>
