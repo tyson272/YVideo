@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 /* =========================
-   DIRECTORIES (FREE SAFE)
+   DIRECTORIES (FREE PLAN SAFE)
    ========================= */
 
 const uploadDir = path.join(__dirname, 'uploads');
@@ -26,12 +26,38 @@ if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
 const auditLog = path.join(logDir, 'audit.log');
 
 /* =========================
-   MIDDLEWARE
+   BASIC MIDDLEWARE
    ========================= */
 
 app.use(express.urlencoded({ extended: true }));
 
-// Protect admin page
+/* =========================
+   SESSION (⚠️ MUST BE BEFORE ROUTES)
+   ========================= */
+
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'dev_secret',
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      maxAge: 15 * 60 * 1000 // 15 min auto logout
+    }
+  })
+);
+
+/* =========================
+   STATIC FILES
+   ========================= */
+
+app.use(express.static('public'));
+app.use('/thumbnails', express.static(thumbDir));
+
+/* =========================
+   PROTECT ADMIN PAGE
+   ========================= */
+
 app.get('/admin.html', (req, res, next) => {
   if (!req.session.user || req.session.user.role !== 'admin') {
     return res.redirect('/login.html');
@@ -39,34 +65,20 @@ app.get('/admin.html', (req, res, next) => {
   next();
 });
 
-app.use(express.static('public'));
-app.use('/thumbnails', express.static(thumbDir));
-
 /* =========================
-   SESSION
+   PASSWORD HASHES
    ========================= */
 
-app.use(
-  session({
-    secret: process.env.SESSION_SECRET || 'secret',
-    resave: false,
-    saveUninitialized: false,
-    cookie: {
-      httpOnly: true,
-      maxAge: 15 * 60 * 1000 // 15 minutes auto logout
-    }
-  })
-);
-
-/* =========================
-   PASSWORDS
-   ========================= */
+if (!process.env.ADMIN_PASSWORD || !process.env.SITE_PASSWORD) {
+  console.error('❌ Missing ADMIN_PASSWORD or SITE_PASSWORD');
+  process.exit(1);
+}
 
 const adminHash = bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10);
 const siteHash = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
 
 /* =========================
-   HELPERS
+   AUTH HELPERS
    ========================= */
 
 function requireLogin(req, res, next) {
@@ -88,12 +100,11 @@ function logView(req, video) {
     ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
     time: new Date().toISOString()
   };
-
   fs.appendFile(auditLog, JSON.stringify(entry) + '\n', () => {});
 }
 
 /* =========================
-   AUTH ROUTES
+   LOGIN / LOGOUT
    ========================= */
 
 app.post('/login', async (req, res) => {
@@ -197,9 +208,18 @@ app.get('/admin/logs', requireAdmin, (req, res) => {
 });
 
 /* =========================
+   ERROR HANDLER (DEBUG)
+   ========================= */
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).send('Internal Server Error');
+});
+
+/* =========================
    START SERVER
    ========================= */
 
 app.listen(PORT, () => {
-  console.log('🎬 YVideo running (Render Free Plan)');
+  console.log('🎬 YVideo running correctly');
 });
