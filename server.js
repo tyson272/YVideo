@@ -11,22 +11,27 @@ const ffmpeg = require('fluent-ffmpeg');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ===== Directories =====
-const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+/* =========================
+   DIRECTORIES (FREE SAFE)
+   ========================= */
+
+const uploadDir = path.join(__dirname, 'uploads');
 const thumbDir = path.join(uploadDir, 'thumbnails');
-const baseDataDir = process.env.DATA_DIR || __dirname;
-const logDir = path.join(baseDataDir, 'logs');
+const logDir = path.join(__dirname, 'logs');
 
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
-if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir, { recursive: true });
-if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
+if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir);
+if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
 
-const auditLogFile = path.join(logDir, 'audit.log');
+const auditLog = path.join(logDir, 'audit.log');
 
-// ===== Middleware =====
+/* =========================
+   MIDDLEWARE
+   ========================= */
+
 app.use(express.urlencoded({ extended: true }));
 
-// Hide admin page from public
+// Protect admin page
 app.get('/admin.html', (req, res, next) => {
   if (!req.session.user || req.session.user.role !== 'admin') {
     return res.redirect('/login.html');
@@ -37,24 +42,33 @@ app.get('/admin.html', (req, res, next) => {
 app.use(express.static('public'));
 app.use('/thumbnails', express.static(thumbDir));
 
-// ===== Session =====
+/* =========================
+   SESSION
+   ========================= */
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET,
+    secret: process.env.SESSION_SECRET || 'secret',
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      maxAge: 15 * 60 * 1000 // auto logout 15 min
+      maxAge: 15 * 60 * 1000 // 15 minutes auto logout
     }
   })
 );
 
-// ===== Passwords =====
+/* =========================
+   PASSWORDS
+   ========================= */
+
 const adminHash = bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10);
 const siteHash = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
 
-// ===== Helpers =====
+/* =========================
+   HELPERS
+   ========================= */
+
 function requireLogin(req, res, next) {
   if (!req.session.user) return res.redirect('/login.html');
   next();
@@ -69,16 +83,19 @@ function requireAdmin(req, res, next) {
 
 function logView(req, video) {
   const entry = {
-    role: req.session.user?.role,
+    role: req.session.user.role,
     video,
     ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-    ua: req.headers['user-agent'],
     time: new Date().toISOString()
   };
-  fs.appendFile(auditLogFile, JSON.stringify(entry) + '\n', () => {});
+
+  fs.appendFile(auditLog, JSON.stringify(entry) + '\n', () => {});
 }
 
-// ===== Login =====
+/* =========================
+   AUTH ROUTES
+   ========================= */
+
 app.post('/login', async (req, res) => {
   const { password } = req.body;
 
@@ -95,15 +112,16 @@ app.post('/login', async (req, res) => {
   res.redirect('/login.html?error=1');
 });
 
-// ===== Logout =====
 app.get('/logout', (req, res) => {
   req.session.destroy(() => res.redirect('/login.html'));
 });
 
-// ===== Multer =====
+/* =========================
+   UPLOAD + THUMBNAIL
+   ========================= */
+
 const upload = multer({ dest: uploadDir });
 
-// ===== UPLOAD + THUMBNAIL =====
 app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
   const videoPath = path.join(uploadDir, req.file.filename);
   const thumbPath = path.join(thumbDir, req.file.filename + '.jpg');
@@ -115,55 +133,73 @@ app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
       folder: thumbDir,
       size: '320x180'
     })
-    .on('end', () => {
-      console.log('Thumbnail created');
-      res.redirect('/admin.html');
-    })
+    .on('end', () => res.redirect('/admin.html'))
     .on('error', err => {
-      console.error('FFmpeg error:', err);
+      console.error('FFmpeg error:', err.message);
       res.redirect('/admin.html');
     });
 });
 
-// ===== VIDEOS LIST =====
+/* =========================
+   VIDEOS API
+   ========================= */
+
 app.get('/videos', requireLogin, (req, res) => {
-  const files = fs.readdirSync(uploadDir)
+  const files = fs
+    .readdirSync(uploadDir)
     .filter(f => f !== 'thumbnails');
 
   res.json(files.map(name => ({ name })));
 });
 
-// ===== STREAM =====
+/* =========================
+   STREAM VIDEO
+   ========================= */
+
 app.get('/stream/:name', requireLogin, (req, res) => {
   const fileName = path.basename(req.params.name);
   const filePath = path.join(uploadDir, fileName);
+
   if (!fs.existsSync(filePath)) return res.sendStatus(404);
 
   logView(req, fileName);
   fs.createReadStream(filePath).pipe(res);
 });
 
-// ===== DELETE =====
+/* =========================
+   DELETE VIDEO
+   ========================= */
+
 app.delete('/delete-video/:name', requireAdmin, (req, res) => {
-  const fileName = path.basename(req.params.name);
-  fs.unlinkSync(path.join(uploadDir, fileName));
-  fs.unlink(path.join(thumbDir, fileName + '.jpg'), () => {});
+  const name = path.basename(req.params.name);
+
+  fs.unlinkSync(path.join(uploadDir, name));
+  fs.unlink(path.join(thumbDir, name + '.jpg'), () => {});
+
   res.json({ success: true });
 });
 
-// ===== ADMIN LOGS =====
+/* =========================
+   ADMIN LOGS
+   ========================= */
+
 app.get('/admin/logs', requireAdmin, (req, res) => {
-  if (!fs.existsSync(auditLogFile)) return res.json([]);
-  const logs = fs.readFileSync(auditLogFile, 'utf8')
+  if (!fs.existsSync(auditLog)) return res.json([]);
+
+  const logs = fs
+    .readFileSync(auditLog, 'utf8')
     .trim()
     .split('\n')
-    .filter(Boolean)
-    .map(l => JSON.parse(l))
+    .map(JSON.parse)
     .reverse();
+
   res.json(logs);
 });
 
-// ===== START =====
+/* =========================
+   START SERVER
+   ========================= */
+
 app.listen(PORT, () => {
-  console.log('🎬 YVideo with thumbnails running');
+  console.log('🎬 YVideo running (Render Free Plan)');
 });
