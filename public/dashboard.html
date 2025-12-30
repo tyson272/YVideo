@@ -1,63 +1,80 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Gallery</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>Browse</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body oncontextmenu="return false">
+<body class="bg-black text-white">
 
-<div class="container">
-  <div class="top-bar">
-    <h1>Gallery</h1>
-    <input id="search" placeholder="Search..." />
-    <a href="/logout">Logout</a>
+<header class="flex justify-between items-center px-6 py-4 border-b border-zinc-800">
+  <h1 class="text-2xl font-bold text-red-600">YVideo</h1>
+  <input id="search" placeholder="Search"
+    class="bg-zinc-800 px-3 py-1 rounded text-sm focus:outline-none">
+  <a href="/logout" class="text-sm text-gray-400 hover:text-white">Logout</a>
+</header>
+
+<main class="p-6">
+  <div id="grid"
+    class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
   </div>
+</main>
 
-  <div id="gallery"></div>
-  <button id="more">Load more</button>
+<!-- Fullscreen Modal -->
+<div id="modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50">
+  <button onclick="closeModal()" class="absolute top-4 right-6 text-2xl">✕</button>
+  <video id="player" controls class="max-h-[90vh] max-w-[90vw]"></video>
 </div>
 
 <script>
-let page = 0;
-const PAGE_SIZE = 2;
-let albumsCache = [];
+let allVideos = [];
 
-async function loadAll() {
-  const res = await fetch('/media');
-  albumsCache = await res.json();
-  render();
+async function loadVideos() {
+  const res = await fetch('/videos');
+  if (!res.ok) return location.href = '/login.html';
+
+  allVideos = await res.json();
+  render(allVideos);
 }
 
-function render() {
-  const q = document.getElementById('search').value.toLowerCase();
-  const container = document.getElementById('gallery');
-  container.innerHTML = '';
+function render(list) {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  list.forEach(v => {
+    const card = document.createElement('div');
+    card.className =
+      'bg-zinc-900 aspect-video rounded cursor-pointer hover:scale-105 transition flex items-center justify-center';
 
-  albumsCache
-    .filter(a => a.album.toLowerCase().includes(q))
-    .slice(0, (page + 1) * PAGE_SIZE)
-    .forEach(a => {
-      container.innerHTML += `<h2>${a.album}</h2><div class="grid">`;
-      a.files.forEach(f => {
-        container.innerHTML += f.match(/\.(mp4|webm)$/)
-          ? `<video src="/media/${a.album}/${f}" controls controlsList="nodownload"></video>`
-          : `<img src="/media/${a.album}/${f}" draggable="false" />`;
-      });
-      container.innerHTML += `</div>`;
-    });
+    card.innerHTML = '<span class="text-gray-400 text-sm">▶</span>';
+    card.onclick = () => openModal(v.name);
+
+    grid.appendChild(card);
+  });
 }
 
-document.getElementById('search').oninput = () => {
-  page = 0;
-  render();
+function openModal(name) {
+  const modal = document.getElementById('modal');
+  const player = document.getElementById('player');
+  player.src = `/stream/${encodeURIComponent(name)}`;
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeModal() {
+  const modal = document.getElementById('modal');
+  const player = document.getElementById('player');
+  player.pause();
+  player.src = '';
+  modal.classList.add('hidden');
+}
+
+document.getElementById('search').oninput = e => {
+  const q = e.target.value.toLowerCase();
+  render(allVideos.filter(v => v.name.toLowerCase().includes(q)));
 };
 
-document.getElementById('more').onclick = () => {
-  page++;
-  render();
-};
-
-loadAll();
+loadVideos();
 </script>
+
 </body>
 </html>

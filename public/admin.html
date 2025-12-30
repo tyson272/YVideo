@@ -1,90 +1,73 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Admin Panel</title>
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <title>Admin</title>
+  <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body>
+<body class="bg-black text-white">
 
-<div class="container">
-  <div class="top-bar">
-    <h1>Admin Panel</h1>
-    <a href="/logout">Logout</a>
-  </div>
+<header class="flex justify-between px-6 py-4 border-b border-zinc-800">
+  <h1 class="text-2xl font-bold text-red-600">Admin</h1>
+  <a href="/logout" class="text-gray-400">Logout</a>
+</header>
 
-  <!-- Upload box -->
-  <div class="admin-box" id="dropZone">
-    <input id="album" type="text" placeholder="Album name" />
-    <input id="fileInput" type="file" multiple accept="image/*,video/*" hidden />
-    <p>Drag & drop files here or click</p>
-  </div>
+<main class="p-6 space-y-8">
 
-  <h2>Your Media</h2>
-  <div id="media"></div>
+<form action="/upload" method="POST" enctype="multipart/form-data"
+  class="bg-zinc-900 p-4 rounded flex gap-4">
+  <input type="file" name="video" required>
+  <button class="bg-red-600 px-6 py-2 rounded">Upload</button>
+</form>
+
+<div id="videos"
+ class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
 </div>
 
+<section>
+  <h2 class="font-semibold mb-2">Audit Logs</h2>
+  <div id="logs" class="text-xs text-gray-400 space-y-1"></div>
+</section>
+
+</main>
+
 <script>
-const dropZone = document.getElementById('dropZone');
-const fileInput = document.getElementById('fileInput');
+async function loadVideos() {
+  const res = await fetch('/videos');
+  const vids = await res.json();
+  const grid = document.getElementById('videos');
+  grid.innerHTML = '';
+  vids.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'bg-zinc-900 aspect-video rounded p-2';
 
-dropZone.onclick = () => fileInput.click();
+    const del = document.createElement('button');
+    del.textContent = 'Delete';
+    del.className = 'text-red-500 text-xs';
+    del.onclick = async () => {
+      await fetch(`/delete-video/${encodeURIComponent(v.name)}`, { method: 'DELETE' });
+      loadVideos();
+    };
 
-dropZone.ondragover = e => {
-  e.preventDefault();
-  dropZone.style.border = '2px dashed #38bdf8';
-};
-
-dropZone.ondragleave = () => {
-  dropZone.style.border = 'none';
-};
-
-dropZone.ondrop = e => {
-  e.preventDefault();
-  uploadFiles(e.dataTransfer.files);
-};
-
-fileInput.onchange = () => uploadFiles(fileInput.files);
-
-async function uploadFiles(files) {
-  const album = document.getElementById('album').value || 'general';
-  for (const file of files) {
-    const fd = new FormData();
-    fd.append('album', album);
-    fd.append('media', file);
-    await fetch('/upload', { method: 'POST', body: fd });
-  }
-  loadMedia();
-}
-
-async function loadMedia() {
-  const res = await fetch('/media');
-  const albums = await res.json();
-  const container = document.getElementById('media');
-  container.innerHTML = '';
-
-  albums.forEach(a => {
-    container.innerHTML += `<h3>${a.album}</h3>`;
-    a.files.forEach(f => {
-      container.innerHTML += `
-        <div>
-          ${f.match(/\.(mp4|webm)$/)
-            ? `<video src="/media/${a.album}/${f}" width="200" controls></video>`
-            : `<img src="/media/${a.album}/${f}" width="200" />`
-          }
-          <button onclick="del('${a.album}','${f}')">Delete</button>
-        </div>
-      `;
-    });
+    card.innerHTML = '<div class="text-gray-400 text-sm mb-2">Video</div>';
+    card.appendChild(del);
+    grid.appendChild(card);
   });
 }
 
-async function del(album, file) {
-  if (!confirm('Delete this file?')) return;
-  await fetch(`/delete/${album}/${file}`, { method: 'DELETE' });
-  loadMedia();
+async function loadLogs() {
+  const res = await fetch('/admin/logs');
+  const logs = await res.json();
+  const el = document.getElementById('logs');
+  el.innerHTML = '';
+  logs.slice(0, 50).forEach(l => {
+    el.innerHTML += `[${new Date(l.time).toLocaleString()}] ${l.role} watched ${l.video}<br>`;
+  });
 }
 
-loadMedia();
+loadVideos();
+loadLogs();
 </script>
+
 </body>
 </html>

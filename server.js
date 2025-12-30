@@ -6,50 +6,55 @@ const multer = require('multer');
 const bcrypt = require('bcrypt');
 const fs = require('fs');
 const path = require('path');
+const ffmpeg = require('fluent-ffmpeg');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// ---------- Ensure uploads folder ----------
-const uploadDir = path.join(__dirname, 'uploads');
+// ===== Directories =====
+const uploadDir = process.env.UPLOAD_DIR || path.join(__dirname, 'uploads');
+const thumbDir = path.join(uploadDir, 'thumbnails');
+const baseDataDir = process.env.DATA_DIR || __dirname;
+const logDir = path.join(baseDataDir, 'logs');
+
 if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir, { recursive: true });
+if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
 
-// ---------- Middleware ----------
+const auditLogFile = path.join(logDir, 'audit.log');
+
+// ===== Middleware =====
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
+
+// Hide admin page from public
+app.get('/admin.html', (req, res, next) => {
+  if (!req.session.user || req.session.user.role !== 'admin') {
+    return res.redirect('/login.html');
+  }
+  next();
+});
+
 app.use(express.static('public'));
-app.use('/uploads', express.static(uploadDir));
+app.use('/thumbnails', express.static(thumbDir));
 
-app.set('trust proxy', 1); // REQUIRED for Render sessions
-
+// ===== Session =====
 app.use(
   session({
-    name: 'yvideo.sid',
-    secret: process.env.SESSION_SECRET || 'yvideo-secret',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: false, // Render handles HTTPS
-      maxAge: 1000 * 60 * 60, // 1 hour
-    },
+      maxAge: 15 * 60 * 1000 // auto logout 15 min
+    }
   })
 );
 
-// ---------- Password hashes (from ENV) ----------
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-const SITE_PASSWORD = process.env.SITE_PASSWORD;
+// ===== Passwords =====
+const adminHash = bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10);
+const siteHash = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
 
-if (!ADMIN_PASSWORD || !SITE_PASSWORD) {
-  console.error('❌ Missing environment passwords');
-  process.exit(1);
-}
-
-const adminHash = bcrypt.hashSync(ADMIN_PASSWORD, 10);
-const siteHash = bcrypt.hashSync(SITE_PASSWORD, 10);
-
-// ---------- Auth helpers ----------
+// ===== Helpers =====
 function requireLogin(req, res, next) {
   if (!req.session.user) return res.redirect('/login.html');
   next();
@@ -57,41 +62,23 @@ function requireLogin(req, res, next) {
 
 function requireAdmin(req, res, next) {
   if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.redirect('/login.html');
+    return res.status(403).send('Admins only');
   }
   next();
 }
 
-// ---------- Multer (photos + videos) ----------
-const storage = multer.diskStorage({
-  destination(req, file, cb) {
-    const album = req.body.album || 'general';
-    const dir = path.join(uploadDir, album);
-    fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename(req, file, cb) {
-    cb(null, Date.now() + '-' + file.originalname);
-  },
-});
+function logView(req, video) {
+  const entry = {
+    role: req.session.user?.role,
+    video,
+    ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
+    ua: req.headers['user-agent'],
+    time: new Date().toISOString()
+  };
+  fs.appendFile(auditLogFile, JSON.stringify(entry) + '\n', () => {});
+}
 
-const upload = multer({
-  storage,
-  fileFilter(req, file, cb) {
-    if (
-      file.mimetype.startsWith('image/') ||
-      file.mimetype.startsWith('video/')
-    ) {
-      cb(null, true);
-    } else {
-      cb(new Error('Only images & videos allowed'));
-    }
-  },
-});
-
-// ---------- ROUTES ----------
-
-// LOGIN
+// ===== Login =====
 app.post('/login', async (req, res) => {
   const { password } = req.body;
 
@@ -108,54 +95,75 @@ app.post('/login', async (req, res) => {
   res.redirect('/login.html?error=1');
 });
 
-// LOGOUT
+// ===== Logout =====
 app.get('/logout', (req, res) => {
-  req.session.destroy(() => {
-    res.redirect('/login.html');
-  });
+  req.session.destroy(() => res.redirect('/login.html'));
 });
 
-// UPLOAD (ADMIN)
-app.post('/upload', requireAdmin, upload.single('media'), (req, res) => {
-  res.redirect('/admin.html');
+// ===== Multer =====
+const upload = multer({ dest: uploadDir });
+
+// ===== UPLOAD + THUMBNAIL =====
+app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
+  const videoPath = path.join(uploadDir, req.file.filename);
+  const thumbPath = path.join(thumbDir, req.file.filename + '.jpg');
+
+  ffmpeg(videoPath)
+    .screenshots({
+      timestamps: ['5'],
+      filename: path.basename(thumbPath),
+      folder: thumbDir,
+      size: '320x180'
+    })
+    .on('end', () => {
+      console.log('Thumbnail created');
+      res.redirect('/admin.html');
+    })
+    .on('error', err => {
+      console.error('FFmpeg error:', err);
+      res.redirect('/admin.html');
+    });
 });
 
-// LIST MEDIA
-app.get('/media', requireLogin, (req, res) => {
-  const albums = fs.readdirSync(uploadDir);
+// ===== VIDEOS LIST =====
+app.get('/videos', requireLogin, (req, res) => {
+  const files = fs.readdirSync(uploadDir)
+    .filter(f => f !== 'thumbnails');
 
-  const data = albums.map((album) => ({
-    album,
-    files: fs.readdirSync(path.join(uploadDir, album)),
-  }));
-
-  res.json(data);
+  res.json(files.map(name => ({ name })));
 });
 
-// STREAM MEDIA
-app.get('/media/:album/:file', requireLogin, (req, res) => {
-  const filePath = path.join(
-    uploadDir,
-    req.params.album,
-    req.params.file
-  );
-
+// ===== STREAM =====
+app.get('/stream/:name', requireLogin, (req, res) => {
+  const fileName = path.basename(req.params.name);
+  const filePath = path.join(uploadDir, fileName);
   if (!fs.existsSync(filePath)) return res.sendStatus(404);
+
+  logView(req, fileName);
   fs.createReadStream(filePath).pipe(res);
 });
 
-// DELETE MEDIA (ADMIN)
-app.delete('/delete/:album/:file', requireAdmin, (req, res) => {
-  const filePath = path.join(
-    uploadDir,
-    req.params.album,
-    req.params.file
-  );
-  fs.unlinkSync(filePath);
+// ===== DELETE =====
+app.delete('/delete-video/:name', requireAdmin, (req, res) => {
+  const fileName = path.basename(req.params.name);
+  fs.unlinkSync(path.join(uploadDir, fileName));
+  fs.unlink(path.join(thumbDir, fileName + '.jpg'), () => {});
   res.json({ success: true });
 });
 
-// ---------- START ----------
+// ===== ADMIN LOGS =====
+app.get('/admin/logs', requireAdmin, (req, res) => {
+  if (!fs.existsSync(auditLogFile)) return res.json([]);
+  const logs = fs.readFileSync(auditLogFile, 'utf8')
+    .trim()
+    .split('\n')
+    .filter(Boolean)
+    .map(l => JSON.parse(l))
+    .reverse();
+  res.json(logs);
+});
+
+// ===== START =====
 app.listen(PORT, () => {
-  console.log(`🔒 YVideo running on port ${PORT}`);
+  console.log('🎬 YVideo with thumbnails running');
 });
