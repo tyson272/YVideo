@@ -4,75 +4,65 @@ const express = require('express');
 const session = require('express-session');
 const multer = require('multer');
 const bcrypt = require('bcrypt');
-const fs = require('fs');
 const path = require('path');
-const ffmpeg = require('fluent-ffmpeg');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 /* =========================
-   DIRECTORIES (FREE PLAN SAFE)
+   CLOUDINARY CONFIG
    ========================= */
 
-const uploadDir = path.join(__dirname, 'uploads');
-const thumbDir = path.join(uploadDir, 'thumbnails');
-const logDir = path.join(__dirname, 'logs');
-
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-if (!fs.existsSync(thumbDir)) fs.mkdirSync(thumbDir);
-if (!fs.existsSync(logDir)) fs.mkdirSync(logDir);
-
-const auditLog = path.join(logDir, 'audit.log');
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 
 /* =========================
    BASIC MIDDLEWARE
    ========================= */
 
 app.use(express.urlencoded({ extended: true }));
+app.use(express.static('public'));
 
 /* =========================
-   SESSION (⚠️ MUST BE BEFORE ROUTES)
+   SESSION (MUST BE BEFORE ROUTES)
    ========================= */
 
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || 'dev_secret',
+    secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      maxAge: 15 * 60 * 1000 // 15 min auto logout
+      maxAge: 15 * 60 * 1000 // 15 minutes auto logout
     }
   })
 );
 
 /* =========================
-   STATIC FILES
+   ENV VALIDATION
    ========================= */
 
-app.use(express.static('public'));
-app.use('/thumbnails', express.static(thumbDir));
-
-/* =========================
-   PROTECT ADMIN PAGE
-   ========================= */
-
-app.get('/admin.html', (req, res, next) => {
-  if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.redirect('/login.html');
-  }
-  next();
-});
+if (
+  !process.env.ADMIN_PASSWORD ||
+  !process.env.SITE_PASSWORD ||
+  !process.env.SESSION_SECRET ||
+  !process.env.CLOUDINARY_CLOUD_NAME ||
+  !process.env.CLOUDINARY_API_KEY ||
+  !process.env.CLOUDINARY_API_SECRET
+) {
+  console.error('❌ Missing required environment variables');
+  process.exit(1);
+}
 
 /* =========================
    PASSWORD HASHES
    ========================= */
-
-if (!process.env.ADMIN_PASSWORD || !process.env.SITE_PASSWORD) {
-  console.error('❌ Missing ADMIN_PASSWORD or SITE_PASSWORD');
-  process.exit(1);
-}
 
 const adminHash = bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10);
 const siteHash = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
@@ -88,20 +78,21 @@ function requireLogin(req, res, next) {
 
 function requireAdmin(req, res, next) {
   if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.status(403).send('Admins only');
+    return res.redirect('/login.html');
   }
   next();
 }
 
-function logView(req, video) {
-  const entry = {
-    role: req.session.user.role,
-    video,
-    ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress,
-    time: new Date().toISOString()
-  };
-  fs.appendFile(auditLog, JSON.stringify(entry) + '\n', () => {});
-}
+/* =========================
+   PROTECT ADMIN PAGE
+   ========================= */
+
+app.get('/admin.html', (req, res, next) => {
+  if (!req.session.user || req.session.user.role !== 'admin') {
+    return res.redirect('/login.html');
+  }
+  next();
+});
 
 /* =========================
    LOGIN / LOGOUT
@@ -128,87 +119,86 @@ app.get('/logout', (req, res) => {
 });
 
 /* =========================
-   UPLOAD + THUMBNAIL
+   CLOUDINARY STORAGE
+   (CUSTOM TITLE SUPPORT)
    ========================= */
 
-const upload = multer({ dest: uploadDir });
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: async (req, file) => {
+    const rawTitle = req.body.title || path.parse(file.originalname).name;
+
+    const safeTitle = rawTitle
+      .trim()
+      .replace(/[^a-zA-Z0-9-_ ]/g, '')
+      .replace(/\s+/g, '-')
+      .toLowerCase();
+
+    return {
+      folder: 'yvideo',
+      resource_type: 'video',
+      public_id: safeTitle,
+      overwrite: false
+    };
+  }
+});
+
+const upload = multer({ storage });
+
+/* =========================
+   UPLOAD VIDEO (ADMIN)
+   ========================= */
 
 app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
-  const videoPath = path.join(uploadDir, req.file.filename);
-  const thumbPath = path.join(thumbDir, req.file.filename + '.jpg');
-
-  ffmpeg(videoPath)
-    .screenshots({
-      timestamps: ['5'],
-      filename: path.basename(thumbPath),
-      folder: thumbDir,
-      size: '320x180'
-    })
-    .on('end', () => res.redirect('/admin.html'))
-    .on('error', err => {
-      console.error('FFmpeg error:', err.message);
-      res.redirect('/admin.html');
-    });
+  res.redirect('/admin.html');
 });
 
 /* =========================
-   VIDEOS API
+   LIST VIDEOS (FULL LENGTH)
    ========================= */
 
-app.get('/videos', requireLogin, (req, res) => {
-  const files = fs
-    .readdirSync(uploadDir)
-    .filter(f => f !== 'thumbnails');
+app.get('/videos', requireLogin, async (req, res) => {
+  const result = await cloudinary.search
+    .expression('folder:yvideo')
+    .sort_by('created_at', 'desc')
+    .max_results(100)
+    .execute();
 
-  res.json(files.map(name => ({ name })));
+  res.json(
+    result.resources.map(v => ({
+      id: v.public_id,
+      title: v.public_id
+        .split('/')
+        .pop()
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, c => c.toUpperCase()),
+      thumbnail: cloudinary.url(v.public_id, {
+        resource_type: 'video',
+        format: 'jpg',
+        transformation: [{ width: 320, height: 180, crop: 'fill' }]
+      }),
+      stream: cloudinary.url(v.public_id, {
+        resource_type: 'video',
+        secure: true,
+        transformation: [] // FULL VIDEO (NO 3s LIMIT)
+      })
+    }))
+  );
 });
 
 /* =========================
-   STREAM VIDEO
+   DELETE VIDEO (ADMIN)
    ========================= */
 
-app.get('/stream/:name', requireLogin, (req, res) => {
-  const fileName = path.basename(req.params.name);
-  const filePath = path.join(uploadDir, fileName);
-
-  if (!fs.existsSync(filePath)) return res.sendStatus(404);
-
-  logView(req, fileName);
-  fs.createReadStream(filePath).pipe(res);
-});
-
-/* =========================
-   DELETE VIDEO
-   ========================= */
-
-app.delete('/delete-video/:name', requireAdmin, (req, res) => {
-  const name = path.basename(req.params.name);
-
-  fs.unlinkSync(path.join(uploadDir, name));
-  fs.unlink(path.join(thumbDir, name + '.jpg'), () => {});
-
+app.delete('/delete-video/:id', requireAdmin, async (req, res) => {
+  await cloudinary.uploader.destroy(req.params.id, {
+    resource_type: 'video'
+  });
   res.json({ success: true });
 });
 
 /* =========================
-   ADMIN LOGS
-   ========================= */
-
-app.get('/admin/logs', requireAdmin, (req, res) => {
-  if (!fs.existsSync(auditLog)) return res.json([]);
-
-  const logs = fs
-    .readFileSync(auditLog, 'utf8')
-    .trim()
-    .split('\n')
-    .map(JSON.parse)
-    .reverse();
-
-  res.json(logs);
-});
-
-/* =========================
-   ERROR HANDLER (DEBUG)
+   ERROR HANDLER
    ========================= */
 
 app.use((err, req, res, next) => {
@@ -221,5 +211,5 @@ app.use((err, req, res, next) => {
    ========================= */
 
 app.listen(PORT, () => {
-  console.log('🎬 YVideo running correctly');
+  console.log('🎬 YVideo running (Cloudinary + Custom Titles)');
 });
