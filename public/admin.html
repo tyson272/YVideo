@@ -14,27 +14,36 @@
 
 <main class="p-6 space-y-8">
 
-<form action="/upload" method="POST" enctype="multipart/form-data"
-      class="bg-zinc-900 p-4 rounded flex flex-col gap-3 max-w-md">
-
+<form
+  action="/upload"
+  method="POST"
+  enctype="multipart/form-data"
+  style="max-width:400px;margin:auto"
+>
   <input
     type="text"
     name="title"
-    placeholder="Video title (e.g. My Trip to Goa)"
+    placeholder="Video title"
     required
-    class="bg-zinc-800 px-3 py-2 rounded text-sm focus:outline-none">
+    style="width:100%;padding:10px;margin-bottom:10px"
+  />
 
   <input
     type="file"
     name="video"
     accept="video/*"
     required
-    class="text-sm">
+    style="margin-bottom:10px"
+  />
 
-  <button class="bg-red-600 px-4 py-2 rounded hover:bg-red-700">
-    Upload
+  <button
+    type="submit"
+    style="padding:10px;width:100%;background:#e50914;color:white;border:none"
+  >
+    Upload Video
   </button>
 </form>
+
 
 
 <div id="videos"
