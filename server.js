@@ -34,15 +34,19 @@ app.use(express.static('public'));
 
 app.use(
   session({
+    name: 'yvideo.sid',
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      maxAge: 15 * 60 * 1000 // 15 minutes auto logout
+      sameSite: 'lax',   // 🔑 FIXES LOGIN LOOP
+      secure: false,     // Render handles HTTPS
+      maxAge: 60 * 60 * 1000 // 1 hour (safe)
     }
   })
 );
+
 
 /* =========================
    ENV VALIDATION
