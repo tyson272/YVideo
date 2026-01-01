@@ -14,7 +14,6 @@ const PORT = process.env.PORT || 3000;
 /* =========================
    CLOUDINARY CONFIG
    ========================= */
-
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -24,13 +23,8 @@ cloudinary.config({
 /* =========================
    MIDDLEWARE
    ========================= */
-
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
-
-/* =========================
-   SESSION (STABLE CONFIG)
-   ========================= */
 
 app.use(
   session({
@@ -39,9 +33,7 @@ app.use(
     resave: false,
     saveUninitialized: false,
     cookie: {
-      httpOnly: true,
       sameSite: 'lax',
-      secure: false,
       maxAge: 60 * 60 * 1000 // 1 hour
     }
   })
@@ -50,7 +42,6 @@ app.use(
 /* =========================
    ENV CHECK
    ========================= */
-
 if (
   !process.env.ADMIN_PASSWORD ||
   !process.env.SITE_PASSWORD ||
@@ -66,22 +57,20 @@ if (
 /* =========================
    PASSWORDS
    ========================= */
-
 const adminHash = bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10);
-const siteHash = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
+const userHash  = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
 
 /* =========================
    AUTH HELPERS
    ========================= */
-
 function requireLogin(req, res, next) {
   if (!req.session.user) return res.redirect('/login.html');
   next();
 }
 
 function requireAdmin(req, res, next) {
-  if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.status(401).json({ error: 'Unauthorized' });
+  if (req.session.user !== 'admin') {
+    return res.redirect('/login.html'); // 🔑 FIX
   }
   next();
 }
@@ -89,17 +78,16 @@ function requireAdmin(req, res, next) {
 /* =========================
    LOGIN / LOGOUT
    ========================= */
-
 app.post('/login', async (req, res) => {
   const { password } = req.body;
 
   if (await bcrypt.compare(password, adminHash)) {
-    req.session.user = { role: 'admin' };
+    req.session.user = 'admin';
     return res.redirect('/admin.html');
   }
 
-  if (await bcrypt.compare(password, siteHash)) {
-    req.session.user = { role: 'viewer' };
+  if (await bcrypt.compare(password, userHash)) {
+    req.session.user = 'user';
     return res.redirect('/dashboard.html');
   }
 
@@ -113,14 +101,13 @@ app.get('/logout', (req, res) => {
 /* =========================
    CLOUDINARY STORAGE
    ========================= */
-
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
-    const rawTitle = req.body.title || path.parse(file.originalname).name;
-    const safeTitle = rawTitle
+    const title = req.body.title || file.originalname;
+    const safeTitle = title
       .trim()
-      .replace(/[^a-zA-Z0-9-_ ]/g, '')
+      .replace(/[^a-zA-Z0-9 ]/g, '')
       .replace(/\s+/g, '-')
       .toLowerCase();
 
@@ -138,7 +125,6 @@ const upload = multer({ storage });
 /* =========================
    UPLOAD (ADMIN ONLY)
    ========================= */
-
 app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
   res.redirect('/admin.html');
 });
@@ -146,7 +132,6 @@ app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
 /* =========================
    LIST VIDEOS
    ========================= */
-
 app.get('/videos', requireLogin, async (req, res) => {
   const result = await cloudinary.search
     .expression('folder:yvideo')
@@ -156,7 +141,6 @@ app.get('/videos', requireLogin, async (req, res) => {
 
   res.json(
     result.resources.map(v => ({
-      id: v.public_id,
       title: v.public_id
         .split('/')
         .pop()
@@ -170,27 +154,15 @@ app.get('/videos', requireLogin, async (req, res) => {
       stream: cloudinary.url(v.public_id, {
         resource_type: 'video',
         secure: true,
-        transformation: []
+        transformation: [] // FULL VIDEO
       })
     }))
   );
 });
 
 /* =========================
-   DELETE (ADMIN ONLY)
-   ========================= */
-
-app.delete('/delete-video/:id', requireAdmin, async (req, res) => {
-  await cloudinary.uploader.destroy(req.params.id, {
-    resource_type: 'video'
-  });
-  res.json({ success: true });
-});
-
-/* =========================
    START SERVER
    ========================= */
-
 app.listen(PORT, () => {
-  console.log('🎬 YVideo running — upload loop FIXED');
+  console.log('🎬 YVideo running — upload authorized');
 });
