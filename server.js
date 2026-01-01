@@ -14,6 +14,7 @@ const PORT = process.env.PORT || 3000;
 /* =========================
    CLOUDINARY CONFIG
    ========================= */
+
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -21,27 +22,32 @@ cloudinary.config({
 });
 
 /* =========================
-   MIDDLEWARE
+   BASIC MIDDLEWARE
    ========================= */
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
 
+/* =========================
+   SESSION (MUST BE BEFORE ROUTES)
+   ========================= */
+
 app.use(
   session({
-    name: 'yvideo.sid',
     secret: process.env.SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
-      sameSite: 'lax',
-      maxAge: 60 * 60 * 1000 // 1 hour
+      httpOnly: true,
+      maxAge: 15 * 60 * 1000 // 15 minutes auto logout
     }
   })
 );
 
 /* =========================
-   ENV CHECK
+   ENV VALIDATION
    ========================= */
+
 if (
   !process.env.ADMIN_PASSWORD ||
   !process.env.SITE_PASSWORD ||
@@ -50,44 +56,58 @@ if (
   !process.env.CLOUDINARY_API_KEY ||
   !process.env.CLOUDINARY_API_SECRET
 ) {
-  console.error('❌ Missing environment variables');
+  console.error('❌ Missing required environment variables');
   process.exit(1);
 }
 
 /* =========================
-   PASSWORDS
+   PASSWORD HASHES
    ========================= */
+
 const adminHash = bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10);
-const userHash  = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
+const siteHash = bcrypt.hashSync(process.env.SITE_PASSWORD, 10);
 
 /* =========================
    AUTH HELPERS
    ========================= */
+
 function requireLogin(req, res, next) {
   if (!req.session.user) return res.redirect('/login.html');
   next();
 }
 
 function requireAdmin(req, res, next) {
-  if (req.session.user !== 'admin') {
-    return res.redirect('/login.html'); // 🔑 FIX
+  if (!req.session.user || req.session.user.role !== 'admin') {
+    return res.redirect('/login.html');
   }
   next();
 }
 
 /* =========================
+   PROTECT ADMIN PAGE
+   ========================= */
+
+app.get('/admin.html', (req, res, next) => {
+  if (!req.session.user || req.session.user.role !== 'admin') {
+    return res.redirect('/login.html');
+  }
+  next();
+});
+
+/* =========================
    LOGIN / LOGOUT
    ========================= */
+
 app.post('/login', async (req, res) => {
   const { password } = req.body;
 
   if (await bcrypt.compare(password, adminHash)) {
-    req.session.user = 'admin';
+    req.session.user = { role: 'admin' };
     return res.redirect('/admin.html');
   }
 
-  if (await bcrypt.compare(password, userHash)) {
-    req.session.user = 'user';
+  if (await bcrypt.compare(password, siteHash)) {
+    req.session.user = { role: 'viewer' };
     return res.redirect('/dashboard.html');
   }
 
@@ -100,14 +120,17 @@ app.get('/logout', (req, res) => {
 
 /* =========================
    CLOUDINARY STORAGE
+   (CUSTOM TITLE SUPPORT)
    ========================= */
+
 const storage = new CloudinaryStorage({
   cloudinary,
   params: async (req, file) => {
-    const title = req.body.title || file.originalname;
-    const safeTitle = title
+    const rawTitle = req.body.title || path.parse(file.originalname).name;
+
+    const safeTitle = rawTitle
       .trim()
-      .replace(/[^a-zA-Z0-9 ]/g, '')
+      .replace(/[^a-zA-Z0-9-_ ]/g, '')
       .replace(/\s+/g, '-')
       .toLowerCase();
 
@@ -123,15 +146,17 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage });
 
 /* =========================
-   UPLOAD (ADMIN ONLY)
+   UPLOAD VIDEO (ADMIN)
    ========================= */
+
 app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
   res.redirect('/admin.html');
 });
 
 /* =========================
-   LIST VIDEOS
+   LIST VIDEOS (FULL LENGTH)
    ========================= */
+
 app.get('/videos', requireLogin, async (req, res) => {
   const result = await cloudinary.search
     .expression('folder:yvideo')
@@ -141,6 +166,7 @@ app.get('/videos', requireLogin, async (req, res) => {
 
   res.json(
     result.resources.map(v => ({
+      id: v.public_id,
       title: v.public_id
         .split('/')
         .pop()
@@ -154,15 +180,36 @@ app.get('/videos', requireLogin, async (req, res) => {
       stream: cloudinary.url(v.public_id, {
         resource_type: 'video',
         secure: true,
-        transformation: [] // FULL VIDEO
+        transformation: [] // FULL VIDEO (NO 3s LIMIT)
       })
     }))
   );
 });
 
 /* =========================
+   DELETE VIDEO (ADMIN)
+   ========================= */
+
+app.delete('/delete-video/:id', requireAdmin, async (req, res) => {
+  await cloudinary.uploader.destroy(req.params.id, {
+    resource_type: 'video'
+  });
+  res.json({ success: true });
+});
+
+/* =========================
+   ERROR HANDLER
+   ========================= */
+
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(500).send('Internal Server Error');
+});
+
+/* =========================
    START SERVER
    ========================= */
+
 app.listen(PORT, () => {
-  console.log('🎬 YVideo running — upload authorized');
+  console.log('🎬 YVideo running (Cloudinary + Custom Titles)');
 });

@@ -14,35 +14,28 @@
 
 <main class="p-6 space-y-8">
 
-<form
-  action="/upload"
-  method="POST"
-  enctype="multipart/form-data"
-  style="max-width:400px;margin:auto"
->
+<form action="/upload" method="POST" enctype="multipart/form-data"
+      class="bg-zinc-900 p-4 rounded flex flex-col gap-3 max-w-md">
+
   <input
     type="text"
     name="title"
-    placeholder="Video title"
+    placeholder="Video title (e.g. My Trip to Goa)"
     required
-    style="width:100%;padding:10px;margin-bottom:10px"
-  />
+    class="bg-zinc-800 px-3 py-2 rounded text-sm focus:outline-none">
 
   <input
     type="file"
     name="video"
     accept="video/*"
     required
-    style="margin-bottom:10px"
-  />
+    class="text-sm">
 
-  <button
-    type="submit"
-    style="padding:10px;width:100%;background:#e50914;color:white;border:none"
-  >
-    Upload Video
+  <button class="bg-red-600 px-4 py-2 rounded hover:bg-red-700">
+    Upload
   </button>
 </form>
+
 
 
 
@@ -60,39 +53,32 @@
 <script>
 async function loadVideos() {
   const res = await fetch('/videos');
-  const vids = await res.json();
+  const videos = await res.json();
   const grid = document.getElementById('videos');
   grid.innerHTML = '';
-  vids.forEach(v => {
-    const card = document.createElement('div');
-    card.className = 'bg-zinc-900 aspect-video rounded p-2';
 
-    const del = document.createElement('button');
-    del.textContent = 'Delete';
-    del.className = 'text-red-500 text-xs';
-    del.onclick = async () => {
-      await fetch(`/delete-video/${encodeURIComponent(v.name)}`, { method: 'DELETE' });
+  videos.forEach(v => {
+    const card = document.createElement('div');
+    card.className = 'bg-zinc-900 p-2 rounded';
+
+    card.innerHTML = `
+      <img src="${v.thumbnail}" class="mb-2 rounded">
+      <div class="text-sm truncate mb-2">${v.title}</div>
+      <button class="text-red-500 text-xs">Delete</button>
+    `;
+
+    card.querySelector('button').onclick = async () => {
+      await fetch('/delete-video/' + encodeURIComponent(v.id), {
+        method: 'DELETE'
+      });
       loadVideos();
     };
 
-    card.innerHTML = '<div class="text-gray-400 text-sm mb-2">Video</div>';
-    card.appendChild(del);
     grid.appendChild(card);
   });
 }
 
-async function loadLogs() {
-  const res = await fetch('/admin/logs');
-  const logs = await res.json();
-  const el = document.getElementById('logs');
-  el.innerHTML = '';
-  logs.slice(0, 50).forEach(l => {
-    el.innerHTML += `[${new Date(l.time).toLocaleString()}] ${l.role} watched ${l.video}<br>`;
-  });
-}
-
 loadVideos();
-loadLogs();
 </script>
 
 </body>

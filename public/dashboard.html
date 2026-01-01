@@ -7,23 +7,43 @@
 </head>
 <body class="bg-black text-white">
 
-<header class="flex justify-between items-center px-6 py-4 border-b border-zinc-800">
-  <h1 class="text-2xl font-bold text-red-600">YVideo</h1>
-  <input id="search" placeholder="Search"
-    class="bg-zinc-800 px-3 py-1 rounded text-sm focus:outline-none">
-  <a href="/logout" class="text-sm text-gray-400 hover:text-white">Logout</a>
+<!-- Header -->
+<header class="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
+  <h1 class="text-red-600 text-2xl font-bold">YVideo</h1>
+  <input
+    id="search"
+    placeholder="Search"
+    class="bg-zinc-800 px-3 py-1 rounded text-sm focus:outline-none"
+  />
+  <a href="/logout" class="text-gray-400 hover:text-white text-sm">Logout</a>
 </header>
 
+<!-- Grid -->
 <main class="p-6">
-  <div id="grid"
+  <div
+    id="grid"
     class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
   </div>
 </main>
 
 <!-- Fullscreen Modal -->
-<div id="modal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50">
-  <button onclick="closeModal()" class="absolute top-4 right-6 text-2xl">✕</button>
-  <video id="player" controls class="max-h-[90vh] max-w-[90vw]"></video>
+<div
+  id="modal"
+  class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50">
+  <button
+    onclick="closeModal()"
+    class="absolute top-4 right-6 text-3xl">
+    ✕
+  </button>
+  <div class="w-full max-w-5xl px-4">
+    <h2 id="videoTitle" class="mb-2 text-lg font-semibold"></h2>
+    <video
+      id="player"
+      controls
+      playsinline
+      class="w-full max-h-[80vh] bg-black rounded">
+    </video>
+  </div>
 </div>
 
 <script>
@@ -31,8 +51,10 @@ let allVideos = [];
 
 async function loadVideos() {
   const res = await fetch('/videos');
-  if (!res.ok) return location.href = '/login.html';
-
+  if (!res.ok) {
+    location.href = '/login.html';
+    return;
+  }
   allVideos = await res.json();
   render(allVideos);
 }
@@ -40,22 +62,33 @@ async function loadVideos() {
 function render(list) {
   const grid = document.getElementById('grid');
   grid.innerHTML = '';
+
   list.forEach(v => {
     const card = document.createElement('div');
     card.className =
-      'bg-zinc-900 aspect-video rounded cursor-pointer hover:scale-105 transition flex items-center justify-center';
+      'cursor-pointer hover:scale-105 transition';
 
-    card.innerHTML = '<span class="text-gray-400 text-sm">▶</span>';
-    card.onclick = () => openModal(v.name);
+    card.innerHTML = `
+      <div class="aspect-video bg-zinc-900 rounded overflow-hidden">
+        <img src="${v.thumbnail}"
+             class="w-full h-full object-cover">
+      </div>
+      <div class="mt-2 text-sm truncate">${v.title}</div>
+    `;
 
+    card.onclick = () => openModal(v);
     grid.appendChild(card);
   });
 }
 
-function openModal(name) {
+function openModal(video) {
   const modal = document.getElementById('modal');
   const player = document.getElementById('player');
-  player.src = `/stream/${encodeURIComponent(name)}`;
+  const title = document.getElementById('videoTitle');
+
+  title.textContent = video.title;
+  player.src = video.stream;
+
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 }
@@ -63,6 +96,7 @@ function openModal(name) {
 function closeModal() {
   const modal = document.getElementById('modal');
   const player = document.getElementById('player');
+
   player.pause();
   player.src = '';
   modal.classList.add('hidden');
@@ -70,7 +104,11 @@ function closeModal() {
 
 document.getElementById('search').oninput = e => {
   const q = e.target.value.toLowerCase();
-  render(allVideos.filter(v => v.name.toLowerCase().includes(q)));
+  render(
+    allVideos.filter(v =>
+      v.title.toLowerCase().includes(q)
+    )
+  );
 };
 
 loadVideos();
