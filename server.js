@@ -12,7 +12,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 /* =========================
-   CLOUDINARY CONFIG
+   CLOUDINARY
    ========================= */
 
 cloudinary.config({
@@ -22,15 +22,11 @@ cloudinary.config({
 });
 
 /* =========================
-   BASIC MIDDLEWARE
+   MIDDLEWARE
    ========================= */
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static('public'));
-
-/* =========================
-   SESSION (MUST BE BEFORE ROUTES)
-   ========================= */
 
 app.use(
   session({
@@ -39,29 +35,15 @@ app.use(
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      maxAge: 15 * 60 * 1000 // 15 minutes auto logout
+      sameSite: 'lax',
+      secure: false,
+      maxAge: 15 * 60 * 1000
     }
   })
 );
 
 /* =========================
-   ENV VALIDATION
-   ========================= */
-
-if (
-  !process.env.ADMIN_PASSWORD ||
-  !process.env.SITE_PASSWORD ||
-  !process.env.SESSION_SECRET ||
-  !process.env.CLOUDINARY_CLOUD_NAME ||
-  !process.env.CLOUDINARY_API_KEY ||
-  !process.env.CLOUDINARY_API_SECRET
-) {
-  console.error('❌ Missing required environment variables');
-  process.exit(1);
-}
-
-/* =========================
-   PASSWORD HASHES
+   PASSWORDS
    ========================= */
 
 const adminHash = bcrypt.hashSync(process.env.ADMIN_PASSWORD, 10);
@@ -84,18 +66,7 @@ function requireAdmin(req, res, next) {
 }
 
 /* =========================
-   PROTECT ADMIN PAGE
-   ========================= */
-
-app.get('/admin.html', (req, res, next) => {
-  if (!req.session.user || req.session.user.role !== 'admin') {
-    return res.redirect('/login.html');
-  }
-  next();
-});
-
-/* =========================
-   LOGIN / LOGOUT
+   LOGIN
    ========================= */
 
 app.post('/login', async (req, res) => {
@@ -120,7 +91,6 @@ app.get('/logout', (req, res) => {
 
 /* =========================
    CLOUDINARY STORAGE
-   (CUSTOM TITLE SUPPORT)
    ========================= */
 
 const storage = new CloudinaryStorage({
@@ -130,7 +100,7 @@ const storage = new CloudinaryStorage({
 
     const safeTitle = rawTitle
       .trim()
-      .replace(/[^a-zA-Z0-9-_ ]/g, '')
+      .replace(/[^a-zA-Z0-9 ]/g, '')
       .replace(/\s+/g, '-')
       .toLowerCase();
 
@@ -146,7 +116,7 @@ const storage = new CloudinaryStorage({
 const upload = multer({ storage });
 
 /* =========================
-   UPLOAD VIDEO (ADMIN)
+   UPLOAD (ADMIN)
    ========================= */
 
 app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
@@ -154,7 +124,7 @@ app.post('/upload', requireAdmin, upload.single('video'), (req, res) => {
 });
 
 /* =========================
-   LIST VIDEOS (FULL LENGTH)
+   LIST VIDEOS
    ========================= */
 
 app.get('/videos', requireLogin, async (req, res) => {
@@ -180,14 +150,14 @@ app.get('/videos', requireLogin, async (req, res) => {
       stream: cloudinary.url(v.public_id, {
         resource_type: 'video',
         secure: true,
-        transformation: [] // FULL VIDEO (NO 3s LIMIT)
+        transformation: []
       })
     }))
   );
 });
 
 /* =========================
-   DELETE VIDEO (ADMIN)
+   DELETE (ADMIN)
    ========================= */
 
 app.delete('/delete-video/:id', requireAdmin, async (req, res) => {
@@ -198,18 +168,9 @@ app.delete('/delete-video/:id', requireAdmin, async (req, res) => {
 });
 
 /* =========================
-   ERROR HANDLER
-   ========================= */
-
-app.use((err, req, res, next) => {
-  console.error(err);
-  res.status(500).send('Internal Server Error');
-});
-
-/* =========================
-   START SERVER
+   START
    ========================= */
 
 app.listen(PORT, () => {
-  console.log('🎬 YVideo running (Cloudinary + Custom Titles)');
+  console.log('🎬 Netflix-style video app running');
 });

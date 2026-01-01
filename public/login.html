@@ -5,29 +5,22 @@
   <title>Login</title>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-black text-white min-h-screen flex items-center justify-center">
+<body class="bg-black flex items-center justify-center h-screen text-white">
 
-<div class="bg-zinc-900 p-8 rounded-xl w-full max-w-sm shadow-xl">
-  <h2 class="text-3xl font-bold mb-6 text-center">Sign In</h2>
+<form method="POST" action="/login"
+ class="bg-zinc-900 p-6 rounded w-80 space-y-4">
 
-  <form method="POST" action="/login" class="space-y-4">
-    <input type="password" name="password" placeholder="Password"
-      class="w-full px-4 py-3 rounded bg-zinc-800 focus:ring-2 focus:ring-red-600"
-      required>
+  <h1 class="text-xl font-bold text-center text-red-600">YVideo</h1>
 
-    <button class="w-full bg-red-600 py-3 rounded font-semibold hover:bg-red-700">
-      Sign In
-    </button>
-  </form>
+  <input type="password" name="password" placeholder="Password"
+   class="w-full bg-zinc-800 p-2 rounded" required>
 
-  <p id="err" class="text-red-500 text-sm mt-4 text-center"></p>
-</div>
+  <button class="w-full bg-red-600 py-2 rounded">Login</button>
 
-<script>
-if (new URLSearchParams(location.search).get('error')) {
-  document.getElementById('err').textContent = 'Incorrect password';
-}
-</script>
+  <p class="text-xs text-gray-400 text-center">
+    Private video platform
+  </p>
+</form>
 
 </body>
 </html>
